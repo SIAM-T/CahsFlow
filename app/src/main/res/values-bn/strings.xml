@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">হিসাব</string>
+    <string name="nav_home">হোম</string>
+    <string name="nav_transactions">লেনদেন</string>
+    <string name="nav_people">মানুষজন</string>
+    <string name="nav_shops">দোকান</string>
+    <string name="nav_more">আরও</string>
+    <string name="welcome_title">হিসাব-এ স্বাগতম</string>
+    <string name="welcome_subtitle">ব্যক্তিগত অর্থ ও ডিজিটাল হিসাব খাতা</string>
+    <string name="choose_currency">মুদ্রা নির্বাচন করুন</string>
+    <string name="starting_cash_balance">শুরুর নগদ ব্যালেন্স</string>
+    <string name="get_started">শুরু করুন</string>
+    <string name="cash_balance">নগদ ব্যালেন্স</string>
+    <string name="receivable">পাওনা (Receivable)</string>
+    <string name="payable">দেনা (Payable)</string>
+    <string name="shop_due">দোকানের বাকি</string>
+    <string name="active_loans">চলমান ঋণ</string>
+    <string name="income">আয়</string>
+    <string name="expense">ব্যয়</string>
+    <string name="give_money">টাকা দেওয়া</string>
+    <string name="take_money">টাকা নেওয়া</string>
+    <string name="receive_payment">আদায়</string>
+    <string name="pay_money">পরিশোধ</string>
+    <string name="loan">ঋণ (Loan)</string>
+    <string name="save">সংরক্ষণ</string>
+    <string name="cancel">বাতিল</string>
+    <string name="undo">পূর্বাবস্থায় ফেরান</string>
+    <string name="backup_restore">ব্যাকআপ ও রিস্টোর</string>
+    <string name="reports">রিপোর্ট</string>
+    <string name="categories">ক্যাটাগরি</string>
+    <string name="customization">কাস্টমাইজেশন</string>
+    <string name="settings">সেটিংস</string>
+    <string name="error_save_transaction">লেনদেনটি সংরক্ষণ করা যায়নি। অনুগ্রহ করে তথ্য যাচাই করে আবার চেষ্টা করুন।</string>
+</resources>

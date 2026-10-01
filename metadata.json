@@ -1,0 +1,6 @@
+{
+  "name": "Hisab",
+  "description": "Offline-first personal finance, shop due, lending, loan, and হিসাব management app",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

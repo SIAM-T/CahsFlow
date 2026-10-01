@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">Hisab</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_transactions">Transactions</string>
+    <string name="nav_people">People</string>
+    <string name="nav_shops">Shops</string>
+    <string name="nav_more">More</string>
+    <string name="welcome_title">Welcome to Hisab</string>
+    <string name="welcome_subtitle">Personal Finance &amp; হিসাব Khata</string>
+    <string name="choose_currency">Choose Currency</string>
+    <string name="starting_cash_balance">Starting Cash Balance</string>
+    <string name="get_started">Get Started</string>
+    <string name="cash_balance">Cash Balance</string>
+    <string name="receivable">Receivable</string>
+    <string name="payable">Payable</string>
+    <string name="shop_due">Shop Due</string>
+    <string name="active_loans">Active Loans</string>
+    <string name="income">Income</string>
+    <string name="expense">Expense</string>
+    <string name="give_money">Give Money</string>
+    <string name="take_money">Take Money</string>
+    <string name="receive_payment">Receive</string>
+    <string name="pay_money">Pay</string>
+    <string name="loan">Loan</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="undo">Undo</string>
+    <string name="backup_restore">Backup &amp; Restore</string>
+    <string name="reports">Reports</string>
+    <string name="categories">Categories</string>
+    <string name="customization">Customization</string>
+    <string name="settings">Settings</string>
+    <string name="error_save_transaction">This transaction could not be saved. Please check the information and try again.</string>
+</resources>
