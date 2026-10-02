@@ -217,13 +217,14 @@ object FinancialEngine {
                 }
 
                 TransactionType.SHOP_DUE -> {
-                    // Product/credit given to shop increases shop due (receivable), not immediate cash
+                    // Goods bought on credit from shop increases user's due to shop (payable)
                     if (isToday) todayShopDue += amt
                 }
 
                 TransactionType.SHOP_PAYMENT -> {
-                    cashDeltaPaisa += amt
-                    if (isToday) todayReceived += amt
+                    // User pays shop for previous dues: cash decreases
+                    cashDeltaPaisa -= amt
+                    if (isToday) todayGiven += amt
                 }
 
                 TransactionType.LOAN_GIVEN -> {
@@ -426,8 +427,8 @@ object FinancialEngine {
             )
         }.sortedByDescending { it.totalPaisa }
 
-        val totalReceivable = totalPeopleReceivable + totalShopDuePaisa + totalLoansGivenRemaining
-        val totalPayable = totalPeoplePayable + totalLoansTakenRemaining
+        val totalReceivable = totalPeopleReceivable + totalLoansGivenRemaining
+        val totalPayable = totalPeoplePayable + totalShopDuePaisa + totalLoansTakenRemaining
         val totalActiveLoans = totalLoansGivenRemaining + totalLoansTakenRemaining
 
         return FinancialSnapshot(
@@ -476,13 +477,13 @@ object FinancialEngine {
             TransactionType.INCOME,
             TransactionType.BORROW,
             TransactionType.RECEIVE_PAYMENT,
-            TransactionType.SHOP_PAYMENT,
             TransactionType.LOAN_REPAYMENT,
             TransactionType.LOAN_RECEIVED -> amt
 
             TransactionType.EXPENSE,
             TransactionType.LEND,
             TransactionType.MAKE_PAYMENT,
+            TransactionType.SHOP_PAYMENT,
             TransactionType.LOAN_GIVEN,
             TransactionType.LOAN_PAYMENT -> -amt
 
@@ -499,6 +500,7 @@ object FinancialEngine {
             TransactionType.EXPENSE,
             TransactionType.LEND,
             TransactionType.MAKE_PAYMENT,
+            TransactionType.SHOP_PAYMENT,
             TransactionType.LOAN_GIVEN,
             TransactionType.LOAN_PAYMENT -> true
             TransactionType.ADJUSTMENT -> adjustmentIsOutflow
@@ -533,7 +535,8 @@ object FinancialEngine {
                     existingTx.shopId == shopId &&
                     TransactionType.fromString(existingTx.type) == TransactionType.SHOP_PAYMENT
                 ) existingTx.amountPaisa else 0L
-                (shopSum.currentDuePaisa + oldRevert).coerceAtLeast(0L)
+                val effectiveDue = (shopSum.currentDuePaisa + oldRevert).coerceAtLeast(0L)
+                minOf(effectiveDue, effectiveCash.coerceAtLeast(0L))
             }
 
             TransactionType.RECEIVE_PAYMENT -> {
@@ -612,64 +615,67 @@ object FinancialEngine {
         val fmtAmt = MoneyUtils.formatPaisa(amountPaisa, currencySymbol)
         val fmtCash = MoneyUtils.formatPaisa(effectiveCash.coerceAtLeast(0L), currencySymbol)
 
-        // 1. CheckShop Payment constraints
+        // 1. Check Shop Payment constraints (Paying off shop due)
         if (type == TransactionType.SHOP_PAYMENT) {
             val shopSum = snapshot.shopSummaries.find { it.shop.id == shopId }
-                ?: return "Cannot receive payment from a new shop with 0 due. Record a Shop Due first."
+                ?: return if (currencySymbol == "৳") "দোকান নির্বাচন করুন।" else "Please select an existing shop."
             val oldRevert = if (existingTx != null &&
                 existingTx.shopId == shopId &&
                 TransactionType.fromString(existingTx.type) == TransactionType.SHOP_PAYMENT
             ) existingTx.amountPaisa else 0L
             val effectiveDue = (shopSum.currentDuePaisa + oldRevert).coerceAtLeast(0L)
             if (effectiveDue <= 0L) {
-                return "${shopSum.shop.name} currently has ${MoneyUtils.formatPaisa(0L, currencySymbol)} due. You cannot receive a payment when there is no due."
+                return if (currencySymbol == "৳") "${shopSum.shop.name}-এ বর্তমানে আপনার কোনো বকেয়া বাকি নেই।" else "${shopSum.shop.name} currently has no due."
             }
             if (amountPaisa > effectiveDue) {
-                return "Overpayment blocked! ${shopSum.shop.name} only owes ${MoneyUtils.formatPaisa(effectiveDue, currencySymbol)}, so you cannot receive $fmtAmt."
+                return if (currencySymbol == "৳") "বকেয়ার চেয়ে বেশি পরিশোধ সম্ভব নয়! ${shopSum.shop.name}-এ বাকি: ${MoneyUtils.formatPaisa(effectiveDue, currencySymbol)}, কিন্তু আপনি দিচ্ছেন $fmtAmt।" else "Overpayment blocked! ${shopSum.shop.name} due is only ${MoneyUtils.formatPaisa(effectiveDue, currencySymbol)}, so you cannot pay $fmtAmt."
+            }
+            if (amountPaisa > effectiveCash) {
+                return if (currencySymbol == "৳") "অপর্যাপ্ত নগদ ব্যালেন্স! আপনার কাছে $fmtCash আছে, তাই $fmtAmt পরিশোধ করা সম্ভব নয়।" else "Insufficient Cash Balance! You only have $fmtCash available, so you cannot pay $fmtAmt."
             }
         }
 
         // 2. Check Person Receive Payment constraints
         if (type == TransactionType.RECEIVE_PAYMENT) {
             val personSum = snapshot.personSummaries.find { it.person.id == personId }
-                ?: return "${personName ?: "This person"} does not owe you any money yet. Use 'Take Money (Borrow)' if you are borrowing from them."
+                ?: return if (currencySymbol == "৳") "${personName ?: "এই ব্যক্তি"}-এর কাছে আপনার কোনো পাওনা বাকি নেই।" else "${personName ?: "This person"} does not owe you any money yet. Use 'Take Money (Borrow)' if you are borrowing from them."
             val oldRevert = if (existingTx != null &&
                 existingTx.personId == personId &&
                 TransactionType.fromString(existingTx.type) == TransactionType.RECEIVE_PAYMENT
             ) existingTx.amountPaisa else 0L
             val effectiveRec = (personSum.directReceivablePaisa + oldRevert).coerceAtLeast(0L)
             if (effectiveRec <= 0L) {
-                return "${personSum.person.name} owes you ${MoneyUtils.formatPaisa(0L, currencySymbol)} right now. Use 'Take Money (Borrow)' if you are borrowing from them."
+                return if (currencySymbol == "৳") "${personSum.person.name}-এর কাছে বর্তমানে কোনো পাওনা নেই।" else "${personSum.person.name} owes you ${MoneyUtils.formatPaisa(0L, currencySymbol)} right now. Use 'Take Money (Borrow)' if you are borrowing from them."
             }
             if (amountPaisa > effectiveRec) {
-                return "Exceeds Receivable! ${personSum.person.name} only owes you ${MoneyUtils.formatPaisa(effectiveRec, currencySymbol)}, so you cannot receive $fmtAmt."
+                return if (currencySymbol == "৳") "পাওনার চেয়ে বেশি আদায় সম্ভব নয়! ${personSum.person.name}-এর কাছে পাওনা মাত্র ${MoneyUtils.formatPaisa(effectiveRec, currencySymbol)}, কিন্তু আপনি নিচ্ছেন $fmtAmt।" else "Exceeds Receivable! ${personSum.person.name} only owes you ${MoneyUtils.formatPaisa(effectiveRec, currencySymbol)}, so you cannot receive $fmtAmt."
             }
         }
 
         // 3. Check Person Make Payment (Repay Debt) constraints
         if (type == TransactionType.MAKE_PAYMENT) {
             val personSum = snapshot.personSummaries.find { it.person.id == personId }
-                ?: return "You do not owe ${personName ?: "this person"} any money yet. Use 'Give Money (Lend)' if you are lending to them."
+                ?: return if (currencySymbol == "৳") "${personName ?: "এই ব্যক্তি"}-এর কাছে আপনার কোনো দেনা নেই।" else "You do not owe ${personName ?: "this person"} any money yet. Use 'Give Money (Lend)' if you are lending to them."
             val oldRevert = if (existingTx != null &&
                 existingTx.personId == personId &&
                 TransactionType.fromString(existingTx.type) == TransactionType.MAKE_PAYMENT
             ) existingTx.amountPaisa else 0L
             val effectivePayable = (personSum.directPayablePaisa + oldRevert).coerceAtLeast(0L)
             if (effectivePayable <= 0L) {
-                return "You do not owe ${personSum.person.name} any money (${MoneyUtils.formatPaisa(0L, currencySymbol)} payable). Use 'Give Money (Lend)' if you are lending to them."
+                return if (currencySymbol == "৳") "${personSum.person.name}-এর কাছে আপনার কোনো দেনা নেই।" else "You do not owe ${personSum.person.name} any money (${MoneyUtils.formatPaisa(0L, currencySymbol)} payable). Use 'Give Money (Lend)' if you are lending to them."
             }
             if (amountPaisa > effectivePayable) {
-                return "Overpayment blocked! You only owe ${personSum.person.name} ${MoneyUtils.formatPaisa(effectivePayable, currencySymbol)}, so you cannot repay $fmtAmt."
+                return if (currencySymbol == "৳") "দেনার চেয়ে বেশি পরিশোধ সম্ভব নয়! ${personSum.person.name}-কে দেওয়ার কথা ${MoneyUtils.formatPaisa(effectivePayable, currencySymbol)}, কিন্তু আপনি দিচ্ছেন $fmtAmt।" else "Overpayment blocked! You only owe ${personSum.person.name} ${MoneyUtils.formatPaisa(effectivePayable, currencySymbol)}, so you cannot repay $fmtAmt."
             }
             if (amountPaisa > effectiveCash) {
-                return "Insufficient Cash Balance! You have $fmtCash available, so you cannot repay $fmtAmt."
+                return if (currencySymbol == "৳") "অপর্যাপ্ত নগদ ব্যালেন্স! আপনার কাছে $fmtCash আছে, তাই $fmtAmt পরিশোধ করা সম্ভব নয়।" else "Insufficient Cash Balance! You have $fmtCash available, so you cannot repay $fmtAmt."
             }
         }
 
         // 4. Check Loan Repayment / Installment constraints
         if (type == TransactionType.LOAN_REPAYMENT || type == TransactionType.LOAN_PAYMENT) {
             val loanSum = snapshot.loanSummaries.find { it.loan.id == loanId }
-                ?: return "Please select an active loan to record a repayment."
+                ?: return if (currencySymbol == "৳") "পরিশোধের জন্য একটি চলমান ঋণ নির্বাচন করুন।" else "Please select an active loan to record a repayment."
             val oldRevert = if (existingTx != null &&
                 existingTx.loanId == loanId &&
                 (TransactionType.fromString(existingTx.type) == TransactionType.LOAN_REPAYMENT ||
@@ -677,13 +683,13 @@ object FinancialEngine {
             ) existingTx.amountPaisa else 0L
             val effectiveLoanRem = (loanSum.remainingPaisa + oldRevert).coerceAtLeast(0L)
             if (effectiveLoanRem <= 0L) {
-                return "This loan with ${loanSum.loan.personName} is already fully settled!"
+                return if (currencySymbol == "৳") "${loanSum.loan.personName}-এর সাথে এই ঋণটি ইতোমধ্যে সম্পূর্ণরূপে পরিশোধিত!" else "This loan with ${loanSum.loan.personName} is already fully settled!"
             }
             if (amountPaisa > effectiveLoanRem) {
-                return "Exceeds Remaining Loan! Only ${MoneyUtils.formatPaisa(effectiveLoanRem, currencySymbol)} remains on this loan, so you cannot record $fmtAmt."
+                return if (currencySymbol == "৳") "বকেয়া ঋণের চেয়ে বেশি পরিশোধ সম্ভব নয়! মাত্র ${MoneyUtils.formatPaisa(effectiveLoanRem, currencySymbol)} বাকি আছে, কিন্তু আপনি দিচ্ছেন $fmtAmt।" else "Exceeds Remaining Loan! Only ${MoneyUtils.formatPaisa(effectiveLoanRem, currencySymbol)} remains on this loan, so you cannot record $fmtAmt."
             }
             if (type == TransactionType.LOAN_PAYMENT && amountPaisa > effectiveCash) {
-                return "Insufficient Cash Balance! You only have $fmtCash available to pay this loan installment of $fmtAmt."
+                return if (currencySymbol == "৳") "অপর্যাপ্ত নগদ ব্যালেন্স! কিস্তি পরিশোধের জন্য আপনার কাছে $fmtCash আছে, যা $fmtAmt এর চেয়ে কম।" else "Insufficient Cash Balance! You only have $fmtCash available to pay this loan installment of $fmtAmt."
             }
         }
 
@@ -691,13 +697,17 @@ object FinancialEngine {
         if (isCashOutflowType(type, adjustmentIsOutflow)) {
             if (amountPaisa > effectiveCash) {
                 val actionDesc = when (type) {
-                    TransactionType.EXPENSE -> "spend"
-                    TransactionType.LEND -> "give"
-                    TransactionType.LOAN_GIVEN -> "lend"
-                    TransactionType.MAKE_PAYMENT, TransactionType.LOAN_PAYMENT -> "pay"
-                    else -> "deduct"
+                    TransactionType.EXPENSE -> if (currencySymbol == "৳") "খরচ" else "spend"
+                    TransactionType.LEND -> if (currencySymbol == "৳") "ধার প্রদান" else "give"
+                    TransactionType.LOAN_GIVEN -> if (currencySymbol == "৳") "ঋণ প্রদান" else "lend"
+                    TransactionType.MAKE_PAYMENT, TransactionType.LOAN_PAYMENT -> if (currencySymbol == "৳") "পরিশোধ" else "pay"
+                    else -> if (currencySymbol == "৳") "কর্তন" else "deduct"
                 }
-                return "Insufficient Cash Balance! You only have $fmtCash available, so you cannot $actionDesc $fmtAmt."
+                return if (currencySymbol == "৳") {
+                    "অপর্যাপ্ত নগদ ব্যালেন্স! আপনার কাছে মাত্র $fmtCash আছে, তাই $fmtAmt $actionDesc করা সম্ভব নয়।"
+                } else {
+                    "Insufficient Cash Balance! You only have $fmtCash available, so you cannot $actionDesc $fmtAmt."
+                }
             }
         }
 

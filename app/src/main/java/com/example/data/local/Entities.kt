@@ -15,8 +15,8 @@ enum class TransactionType(
     BORROW("Money Taken (Borrowed)", "টাকা নেওয়া (ধার)", TransactionDirection.INFLOW),
     RECEIVE_PAYMENT("Payment Received", "পাওনা আদায়", TransactionDirection.INFLOW),
     MAKE_PAYMENT("Payment Made", "দেনা পরিশোধ", TransactionDirection.OUTFLOW),
-    SHOP_DUE("Shop Due", "দোকানের বাকি", TransactionDirection.CREDIT_EXTENDED),
-    SHOP_PAYMENT("Shop Payment Received", "দোকানের টাকা আদায়", TransactionDirection.INFLOW),
+    SHOP_DUE("Shop Due (Buy on Credit)", "দোকানে বাকি (বাকিতে ক্রয়)", TransactionDirection.DEBT_INCURRED),
+    SHOP_PAYMENT("Pay Shop Due", "দোকানে বাকি পরিশোধ", TransactionDirection.OUTFLOW),
     LOAN_GIVEN("Loan Given", "ঋণ প্রদান", TransactionDirection.OUTFLOW),
     LOAN_REPAYMENT("Loan Repayment Received", "ঋণ আদায়", TransactionDirection.INFLOW),
     LOAN_RECEIVED("Loan Taken", "ঋণ গ্রহণ", TransactionDirection.INFLOW),
@@ -190,7 +190,7 @@ data class AppSettingsEntity(
     val glassBlurAmount: Int = 75, // 0..100
     val cardOpacity: Int = 48, // 0..100 (lower = more translucent glass)
     val uiDensity: String = "COMFORTABLE", // COMFORTABLE, COMPACT
-    val languageCode: String = "en", // "en" or "bn"
+    val languageCode: String = "bn", // "bn" or "en"
     val dashboardCardsOrder: String = "CASH_HERO,TODAY_SUMMARY,CURRENT_POSITION,QUICK_ACTIONS,RECENT_ACTIVITY",
     val hiddenDashboardCards: String = "",
     val dashboardLayoutStyle: String = "GRID", // GRID or COMPACT_LIST

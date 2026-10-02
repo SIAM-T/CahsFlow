@@ -124,14 +124,14 @@ fun GlobalAddTransactionPickerSheet(
                 TransactionType.EXPENSE, Icons.Default.Remove, FinanceExpense, "global_add_expense"
             ),
             GlobalActionOption(
-                "Shop Due", "দোকানের বাকি (Shop Due)",
-                "Products given to a shop on credit", "দোকানে বাকিতে পণ্য প্রদান",
+                "Shop Due", "দোকানে বাকি (বাকিতে কেনাকাটা)",
+                "Buy items on credit from a shop", "দোকান থেকে বাকিতে পণ্য কেনা (দোকানদার পাবেন)",
                 TransactionType.SHOP_DUE, Icons.Default.Storefront, FinanceShopDue, "global_add_shop_due"
             ),
             GlobalActionOption(
-                "Receive Shop Payment", "দোকান থেকে আদায়",
-                "Collect due payment from a shop", "দোকানের বকেয়া টাকা আদায়",
-                TransactionType.SHOP_PAYMENT, Icons.Default.Payments, FinanceIncome, "global_add_shop_payment"
+                "Pay Shop Due", "দোকানে বাকি পরিশোধ",
+                "Pay previous due money to a shop", "দোকানের বকেয়া টাকা পরিশোধ করা",
+                TransactionType.SHOP_PAYMENT, Icons.Default.Payments, FinanceExpense, "global_add_shop_payment"
             ),
             GlobalActionOption(
                 "Give Money (Lend)", "টাকা দেওয়া (ধার)",
@@ -515,7 +515,7 @@ fun QuickEntryBottomSheet(
                                 onClick = { isCreatingNewShopInline = !isCreatingNewShopInline }
                             ) {
                                 Text(
-                                    text = if (isCreatingNewShopInline) "Pick Existing Shop" else "+ New Shop"
+                                    text = if (isCreatingNewShopInline) (if (isBn) "বিদ্যমান দোকান নির্বাচন করুন" else "Pick Existing Shop") else (if (isBn) "+ নতুন দোকান" else "+ New Shop")
                                 )
                             }
                         }
@@ -529,7 +529,7 @@ fun QuickEntryBottomSheet(
                                 selectedShopId = null
                                 validationError = null
                             },
-                            label = { Text(if (isBn) "দোকানের নাম (যেমন: Rahman Store)" else "Shop Name (e.g. Rahman Store)") },
+                            label = { Text(if (isBn) "দোকানের নাম (যেমন: রহমান স্টোর)" else "Shop Name (e.g. Rahman Store)") },
                             singleLine = true,
                             colors = glassTextFieldColors(typeAccentColor),
                             shape = RoundedCornerShape(16.dp),
@@ -579,7 +579,7 @@ fun QuickEntryBottomSheet(
                             ) {
                                 Column {
                                     Text(
-                                        text = "${selectedShopSummary.shop.name} • Previous Due",
+                                        text = "${selectedShopSummary.shop.name} • ${if (isBn) "দোকানদার পাবেন (বাকি)" else "Current Due"}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -591,7 +591,7 @@ fun QuickEntryBottomSheet(
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = if (selectedType == TransactionType.SHOP_DUE) "New Total Due" else "Remaining Due",
+                                        text = if (selectedType == TransactionType.SHOP_DUE) (if (isBn) "নতুন মোট বাকি" else "New Total Due") else (if (isBn) "পরিশোধের পর বাকি" else "Remaining Due"),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -630,7 +630,7 @@ fun QuickEntryBottomSheet(
                                 onClick = { isCreatingNewPersonInline = !isCreatingNewPersonInline }
                             ) {
                                 Text(
-                                    text = if (isCreatingNewPersonInline) "Pick Existing Person" else "+ New Person"
+                                    text = if (isCreatingNewPersonInline) (if (isBn) "আগের ব্যক্তি নির্বাচন" else "Pick Existing Person") else (if (isBn) "+ নতুন ব্যক্তি" else "+ New Person")
                                 )
                             }
                         }
@@ -700,9 +700,9 @@ fun QuickEntryBottomSheet(
                                 Column {
                                     Text(
                                         text = if (isReceivableFlow) {
-                                            "${selectedPersonSummary.person.name} owes me"
+                                            if (isBn) "${selectedPersonSummary.person.name} আমার কাছে দেনা (পাওনা)" else "${selectedPersonSummary.person.name} owes me"
                                         } else {
-                                            "I owe ${selectedPersonSummary.person.name}"
+                                            if (isBn) "আমি ${selectedPersonSummary.person.name}-এর কাছে দেনা" else "I owe ${selectedPersonSummary.person.name}"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -715,7 +715,7 @@ fun QuickEntryBottomSheet(
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "After Transaction",
+                                        text = if (isBn) "লেনদেনের পর হবে" else "After Transaction",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

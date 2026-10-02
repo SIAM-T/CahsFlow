@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
@@ -115,11 +116,11 @@ fun MoreHubScreen(
     val items = listOf(
         MoreMenuItem(
             MoreSubScreen.NOTES,
-            if (isBn) "স্মার্ট নোট, চেকলিস্ট ও রিমাইন্ডার" else "Smart Notes, To-Do & Reminders",
-            if (isBn) "বাজেট চেকলিস্ট, স্ট্যাটাস বার পিন ও রিয়েল-টাইম অ্যালার্ট" else "Financial checklists, status-bar pin & real-time alerts",
-            Icons.Default.Edit,
+            if (isBn) "করণীয় তালিকা (To-Do)" else "To-Do & Tasks",
+            if (isBn) "প্রতিদিনের কাজের তালিকা, রিমাইন্ডার ও নোটিফিকেশন" else "Daily task checklist, reminders & notifications",
+            Icons.Default.Checklist,
             Color(0xFF06B6D4),
-            "$activeNotesCount Notes",
+            if (isBn) "${MoneyUtils.formatNumber(activeNotesCount, "bn")}টি চলমান" else "$activeNotesCount Tasks",
             "more_item_notes"
         ),
         MoreMenuItem(

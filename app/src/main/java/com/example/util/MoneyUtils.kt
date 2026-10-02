@@ -42,6 +42,12 @@ object MoneyUtils {
         return sb.toString()
     }
 
+    fun formatNumber(number: Int, lang: String): String =
+        if (lang == "bn") toBanglaDigits(number.toString()) else number.toString()
+
+    fun formatNumber(number: Long, lang: String): String =
+        if (lang == "bn") toBanglaDigits(number.toString()) else number.toString()
+
     /**
      * Parses a user-entered string into exact minor units (paisa).
      * Returns null if invalid or negative, or 0L if zero.

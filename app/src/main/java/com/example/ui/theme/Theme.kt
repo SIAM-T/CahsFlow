@@ -25,11 +25,11 @@ data class HisabThemeConfig(
     val isCompactDensity: Boolean = false,
     val currencySymbol: String = "৳",
     val currencyCode: String = "BDT",
-    val languageCode: String = "en"
+    val languageCode: String = "bn"
 )
 
 val LocalHisabTheme = staticCompositionLocalOf { HisabThemeConfig() }
-val LocalHisabStrings = staticCompositionLocalOf { AppStrings.English }
+val LocalHisabStrings = staticCompositionLocalOf { AppStrings.Bangla }
 
 @Composable
 fun HisabTheme(

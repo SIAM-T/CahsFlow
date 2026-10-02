@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -233,14 +234,14 @@ private fun PeopleListView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
                     Text(
                         text = strings.navPeople,
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = if (isBn) "পাওনা (Receivable) এবং দেনা (Payable) আলাদা হিসাব" else "Track money lent (Receivable) & borrowed (Payable)",
+                        text = if (isBn) "পাওনা ও দেনার আলাদা হিসাব" else "Track money lent & borrowed",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -249,11 +250,18 @@ private fun PeopleListView(
                 Button(
                     onClick = onCreatePerson,
                     shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.testTag("create_person_button")
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 46.dp)
+                        .testTag("create_person_button")
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (isBn) "নতুন ব্যক্তি" else "Add Person")
+                    Text(if (isBn) "নতুন ব্যক্তি" else "Add Person", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -325,7 +333,7 @@ private fun PeopleListView(
                     icon = Icons.Default.Person,
                     title = strings.noPeopleYet,
                     subtitle = strings.addFirstPerson,
-                    actionLabel = "+ Add Person",
+                    actionLabel = if (isBn) "+ নতুন ব্যক্তি যোগ করুন" else "+ Add Person",
                     actionTestTag = "empty_create_person_button",
                     onAction = onCreatePerson
                 )
@@ -441,11 +449,11 @@ private fun PeopleListView(
                     if (summary.loanReceivablePaisa > 0L || summary.loanPayablePaisa > 0L) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Active Loan Balance: Lent ${
-                                MoneyUtils.formatPaisa(summary.loanReceivablePaisa, theme.currencySymbol)
-                            } • Borrowed ${
-                                MoneyUtils.formatPaisa(summary.loanPayablePaisa, theme.currencySymbol)
-                            }",
+                            text = if (isBn) {
+                                "চলমান ঋণ: ধার দেওয়া ${MoneyUtils.formatPaisa(summary.loanReceivablePaisa, theme.currencySymbol)} • ধার নেওয়া ${MoneyUtils.formatPaisa(summary.loanPayablePaisa, theme.currencySymbol)}"
+                            } else {
+                                "Active Loan Balance: Lent ${MoneyUtils.formatPaisa(summary.loanReceivablePaisa, theme.currencySymbol)} • Borrowed ${MoneyUtils.formatPaisa(summary.loanPayablePaisa, theme.currencySymbol)}"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = FinanceLoan
                         )
@@ -464,7 +472,7 @@ private fun PeopleListView(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Give", style = MaterialTheme.typography.labelSmall, color = FinanceReceivable)
+                            Text(if (isBn) "টাকা দিন" else "Give", style = MaterialTheme.typography.labelSmall, color = FinanceReceivable)
                         }
                         OutlinedButton(
                             onClick = { onQuickReceive(summary.person.id) },
@@ -472,7 +480,7 @@ private fun PeopleListView(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Receive", style = MaterialTheme.typography.labelSmall, color = FinanceIncome)
+                            Text(if (isBn) "টাকা নিন" else "Receive", style = MaterialTheme.typography.labelSmall, color = FinanceIncome)
                         }
                         OutlinedButton(
                             onClick = { onQuickBorrow(summary.person.id) },
@@ -480,7 +488,7 @@ private fun PeopleListView(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Borrow", style = MaterialTheme.typography.labelSmall, color = FinancePayable)
+                            Text(if (isBn) "ধার নিন" else "Borrow", style = MaterialTheme.typography.labelSmall, color = FinancePayable)
                         }
                         OutlinedButton(
                             onClick = { onQuickRepay(summary.person.id) },
@@ -488,7 +496,7 @@ private fun PeopleListView(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Repay", style = MaterialTheme.typography.labelSmall, color = FinanceExpense)
+                            Text(if (isBn) "পরিশোধ" else "Repay", style = MaterialTheme.typography.labelSmall, color = FinanceExpense)
                         }
                     }
                 }
@@ -594,7 +602,7 @@ private fun PersonDetailView(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "${summary.person.name} owes me",
+                                text = if (isBn) "${summary.person.name} আমার কাছে দেনা (পাওনা)" else "${summary.person.name} owes me",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -610,7 +618,11 @@ private fun PersonDetailView(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Lent: ${MoneyUtils.formatPaisa(summary.lentPaisa, theme.currencySymbol)} • Recv: ${MoneyUtils.formatPaisa(summary.receivedPaymentPaisa, theme.currencySymbol)}",
+                                text = if (isBn) {
+                                    "ধার দেওয়া: ${MoneyUtils.formatPaisa(summary.lentPaisa, theme.currencySymbol)} • আদায়: ${MoneyUtils.formatPaisa(summary.receivedPaymentPaisa, theme.currencySymbol)}"
+                                } else {
+                                    "Lent: ${MoneyUtils.formatPaisa(summary.lentPaisa, theme.currencySymbol)} • Recv: ${MoneyUtils.formatPaisa(summary.receivedPaymentPaisa, theme.currencySymbol)}"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -631,7 +643,7 @@ private fun PersonDetailView(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "I owe ${summary.person.name}",
+                                text = if (isBn) "আমি ${summary.person.name}-এর কাছে দেনা" else "I owe ${summary.person.name}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -647,7 +659,11 @@ private fun PersonDetailView(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Borrowed: ${MoneyUtils.formatPaisa(summary.borrowedPaisa, theme.currencySymbol)} • Paid: ${MoneyUtils.formatPaisa(summary.madePaymentPaisa, theme.currencySymbol)}",
+                                text = if (isBn) {
+                                    "ধার নেওয়া: ${MoneyUtils.formatPaisa(summary.borrowedPaisa, theme.currencySymbol)} • পরিশোধ: ${MoneyUtils.formatPaisa(summary.madePaymentPaisa, theme.currencySymbol)}"
+                                } else {
+                                    "Borrowed: ${MoneyUtils.formatPaisa(summary.borrowedPaisa, theme.currencySymbol)} • Paid: ${MoneyUtils.formatPaisa(summary.madePaymentPaisa, theme.currencySymbol)}"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -667,12 +683,16 @@ private fun PersonDetailView(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Formal Loans with ${summary.person.name}:",
+                                text = if (isBn) "${summary.person.name}-এর সাথে চলমান ঋণ:" else "Formal Loans with ${summary.person.name}:",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = FinanceLoan
                             )
                             Text(
-                                text = "Lent ${MoneyUtils.formatPaisa(summary.loanReceivablePaisa, theme.currencySymbol)} / Borrowed ${MoneyUtils.formatPaisa(summary.loanPayablePaisa, theme.currencySymbol)}",
+                                text = if (isBn) {
+                                    "ধার দেওয়া ${MoneyUtils.formatPaisa(summary.loanReceivablePaisa, theme.currencySymbol)} / নেওয়া ${MoneyUtils.formatPaisa(summary.loanPayablePaisa, theme.currencySymbol)}"
+                                } else {
+                                    "Lent ${MoneyUtils.formatPaisa(summary.loanReceivablePaisa, theme.currencySymbol)} / Borrowed ${MoneyUtils.formatPaisa(summary.loanPayablePaisa, theme.currencySymbol)}"
+                                },
                                 style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                                 color = FinanceLoan,
                                 fontWeight = FontWeight.Bold
@@ -774,8 +794,12 @@ private fun PersonDetailView(
                 FriendlyEmptyState(
                     icon = Icons.Default.Person,
                     title = strings.noTransactionsYet,
-                    subtitle = "Use the buttons above to record money given, received, borrowed, or repaid.",
-                    actionLabel = "Give Money",
+                    subtitle = if (isBn) {
+                        "উপরের বোতামগুলো ব্যবহার করে ${summary.person.name}-এর সাথে টাকা দেওয়া, নেওয়া, ধার বা পরিশোধের হিসাব রাখুন।"
+                    } else {
+                        "Use the buttons above to record money given, received, borrowed, or repaid with ${summary.person.name}."
+                    },
+                    actionLabel = if (isBn) "টাকা দিন" else "Give Money",
                     onAction = onGiveMoney
                 )
             }
@@ -805,8 +829,8 @@ private fun PersonDetailView(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete ${summary.person.name}?") },
-            text = { Text("This will remove ${summary.person.name}'s profile from People.") },
+            title = { Text(if (isBn) "${summary.person.name}-কে মুছে ফেলতে চান?" else "Delete ${summary.person.name}?") },
+            text = { Text(if (isBn) "এটি নিশ্চিত করলে ${summary.person.name}-এর প্রোফাইল মুছে যাবে।" else "This will remove ${summary.person.name}'s profile from People.") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -833,6 +857,9 @@ private fun PersonFormDialog(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String) -> Unit
 ) {
+    val theme = LocalHisabTheme.current
+    val isBn = theme.languageCode == "bn"
+
     var name by remember(existingPerson) { mutableStateOf(existingPerson?.name ?: "") }
     var phone by remember(existingPerson) { mutableStateOf(existingPerson?.phone ?: "") }
     var note by remember(existingPerson) { mutableStateOf(existingPerson?.note ?: "") }
@@ -843,14 +870,14 @@ private fun PersonFormDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (existingPerson == null) "Add Person" else "Edit Person")
+            Text(if (existingPerson == null) (if (isBn) "নতুন ব্যক্তি যোগ করুন" else "Add Person") else (if (isBn) "ব্যক্তির তথ্য সম্পাদনা" else "Edit Person"))
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name * (e.g. Rahim, Karim)") },
+                    label = { Text(if (isBn) "নাম * (যেমন: রহিম, করিম)" else "Name * (e.g. Rahim, Karim)") },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -859,7 +886,7 @@ private fun PersonFormDialog(
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it },
-                    label = { Text("Phone Number (Optional)") },
+                    label = { Text(if (isBn) "মোবাইল নম্বর (ঐচ্ছিক)" else "Phone Number (Optional)") },
                     leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -867,13 +894,13 @@ private fun PersonFormDialog(
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text("Note (Optional)") },
+                    label = { Text(if (isBn) "নোট / বিবরণ (ঐচ্ছিক)" else "Note (Optional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Text(
-                    text = "Profile Color",
+                    text = if (isBn) "প্রোফাইল রঙ নির্বাচন করুন" else "Profile Color",
                     style = MaterialTheme.typography.labelMedium
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -881,7 +908,7 @@ private fun PersonFormDialog(
                         val c = parseHexColor(hex)
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(c)
                                 .clickable { colorHex = hex },
@@ -890,7 +917,7 @@ private fun PersonFormDialog(
                             if (colorHex.equals(hex, ignoreCase = true)) {
                                 Box(
                                     modifier = Modifier
-                                        .size(12.dp)
+                                        .size(14.dp)
                                         .clip(CircleShape)
                                         .background(Color.White)
                                 )
@@ -909,12 +936,12 @@ private fun PersonFormDialog(
                 },
                 modifier = Modifier.testTag("dialog_save_person_button")
             ) {
-                Text("Save")
+                Text(if (isBn) "সংরক্ষণ করুন" else "Save")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(if (isBn) "বাতিল" else "Cancel")
             }
         }
     )

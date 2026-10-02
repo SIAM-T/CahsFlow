@@ -843,7 +843,11 @@ class HisabViewModel(
             checklistItems.firstOrNull()?.text?.take(32) ?: "Smart Note"
         }
         val now = System.currentTimeMillis()
-        val allChecked = checklistItems.isNotEmpty() && checklistItems.all { it.isChecked }
+        val allChecked = if (checklistItems.isNotEmpty()) {
+            checklistItems.all { it.isChecked }
+        } else {
+            existingNote?.isCompleted ?: false
+        }
         val note = SmartNoteEntity(
             id = existingNote?.id ?: "note_${UUID.randomUUID().toString().replace("-", "").take(10)}",
             title = cleanTitle,
