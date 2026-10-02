@@ -8,13 +8,26 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
@@ -23,14 +36,11 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,10 +48,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -64,6 +78,7 @@ import com.example.ui.screens.ShopsScreen
 import com.example.ui.screens.TransactionsScreen
 import com.example.ui.theme.HisabTheme
 import com.example.ui.theme.LocalHisabStrings
+import com.example.ui.theme.LocalHisabTheme
 import com.example.ui.viewmodel.HisabViewModel
 import com.example.ui.viewmodel.MainNavTab
 import com.example.ui.viewmodel.MoreSubScreen
@@ -102,6 +117,7 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
 
     HisabTheme(settings = uiState.settings) {
         val strings = LocalHisabStrings.current
+        val theme = LocalHisabTheme.current
 
         // Optional Local App Lock Gate (Section 33)
         val requiresLock = uiState.settings.appLockEnabled &&
@@ -133,63 +149,61 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets.safeDrawing,
                 floatingActionButton = {
-                    ExtendedFloatingActionButton(
-                        onClick = { viewModel.openGlobalAddMenu() },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        icon = {
-                            Icon(Icons.Default.Add, contentDescription = strings.addTransaction)
-                        },
-                        text = {
+                    // Luminous Gradient Glass Floating Action Button
+                    val fabShape = RoundedCornerShape(22.dp)
+                    Box(
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .clip(fabShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        theme.accentColor,
+                                        theme.accentColor.copy(alpha = 0.78f)
+                                    )
+                                )
+                            )
+                            .border(
+                                BorderStroke(
+                                    1.2.dp,
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = 0.70f),
+                                            theme.accentColor.copy(alpha = 0.30f)
+                                        )
+                                    )
+                                ),
+                                fabShape
+                            )
+                            .clickable { viewModel.openGlobalAddMenu() }
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                            .testTag("global_add_fab"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = strings.addTransaction,
+                                tint = Color(0xFF042F2E),
+                                modifier = Modifier.size(22.dp)
+                            )
                             Text(
                                 text = "Add",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFF042F2E),
                                 fontWeight = FontWeight.Bold
                             )
-                        },
-                        modifier = Modifier.testTag("global_add_fab")
-                    )
+                        }
+                    }
                 },
                 bottomBar = {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                        tonalElevation = 8.dp
-                    ) {
-                        NavigationBarItem(
-                            selected = currentTab == MainNavTab.HOME,
-                            onClick = { viewModel.selectTab(MainNavTab.HOME) },
-                            icon = { Icon(Icons.Default.Home, contentDescription = strings.navHome) },
-                            label = { Text(strings.navHome) },
-                            modifier = Modifier.testTag("nav_tab_home")
-                        )
-                        NavigationBarItem(
-                            selected = currentTab == MainNavTab.TRANSACTIONS,
-                            onClick = { viewModel.selectTab(MainNavTab.TRANSACTIONS) },
-                            icon = { Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = strings.navTransactions) },
-                            label = { Text(strings.navTransactions) },
-                            modifier = Modifier.testTag("nav_tab_transactions")
-                        )
-                        NavigationBarItem(
-                            selected = currentTab == MainNavTab.PEOPLE,
-                            onClick = { viewModel.selectTab(MainNavTab.PEOPLE) },
-                            icon = { Icon(Icons.Default.People, contentDescription = strings.navPeople) },
-                            label = { Text(strings.navPeople) },
-                            modifier = Modifier.testTag("nav_tab_people")
-                        )
-                        NavigationBarItem(
-                            selected = currentTab == MainNavTab.SHOPS,
-                            onClick = { viewModel.selectTab(MainNavTab.SHOPS) },
-                            icon = { Icon(Icons.Default.Storefront, contentDescription = strings.navShops) },
-                            label = { Text(strings.navShops) },
-                            modifier = Modifier.testTag("nav_tab_shops")
-                        )
-                        NavigationBarItem(
-                            selected = currentTab == MainNavTab.MORE,
-                            onClick = { viewModel.selectTab(MainNavTab.MORE) },
-                            icon = { Icon(Icons.Default.MoreHoriz, contentDescription = strings.navMore) },
-                            label = { Text(strings.navMore) },
-                            modifier = Modifier.testTag("nav_tab_more")
-                        )
-                    }
+                    FloatingGlassBottomBar(
+                        currentTab = currentTab,
+                        onSelectTab = { viewModel.selectTab(it) }
+                    )
                 }
             ) { innerPadding ->
                 Box(
@@ -369,20 +383,31 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .padding(bottom = 72.dp)
+                            .padding(bottom = 16.dp)
                     ) {
                         AnimatedVisibility(
                             visible = statusBannerMessage != null,
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color(0xFF1E293B),
-                                tonalElevation = 6.dp,
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFF0F172A).copy(alpha = 0.85f),
+                                                Color(0xFF1E293B).copy(alpha = 0.75f)
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        1.dp,
+                                        Color.White.copy(alpha = 0.25f),
+                                        RoundedCornerShape(18.dp)
+                                    )
                                     .testTag("status_message_banner")
                             ) {
                                 Text(
@@ -453,7 +478,7 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                 )
             }
 
-            // Global Loan Creator Dialog (accessible from Home Quick Actions & Global Add button)
+            // Global Loan Creator Dialog
             if (showGlobalCreateLoanDialog) {
                 CreateLoanDialog(
                     people = uiState.people,
@@ -475,6 +500,131 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                         showGlobalCreateLoanDialog = false
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingGlassBottomBar(
+    currentTab: MainNavTab,
+    onSelectTab: (MainNavTab) -> Unit
+) {
+    val strings = LocalHisabStrings.current
+    val theme = LocalHisabTheme.current
+    val dockShape = RoundedCornerShape(28.dp)
+
+    data class NavEntry(
+        val tab: MainNavTab,
+        val label: String,
+        val icon: ImageVector,
+        val testTag: String
+    )
+
+    val entries = listOf(
+        NavEntry(MainNavTab.HOME, strings.navHome, Icons.Default.Home, "nav_tab_home"),
+        NavEntry(MainNavTab.TRANSACTIONS, strings.navTransactions, Icons.AutoMirrored.Filled.ReceiptLong, "nav_tab_transactions"),
+        NavEntry(MainNavTab.PEOPLE, strings.navPeople, Icons.Default.People, "nav_tab_people"),
+        NavEntry(MainNavTab.SHOPS, strings.navShops, Icons.Default.Storefront, "nav_tab_shops"),
+        NavEntry(MainNavTab.MORE, strings.navMore, Icons.Default.MoreHoriz, "nav_tab_more")
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(dockShape)
+                .background(
+                    Brush.linearGradient(
+                        colors = if (theme.isDark) {
+                            listOf(
+                                Color(0xFF1E293B).copy(alpha = 0.58f),
+                                Color(0xFF0F172A).copy(alpha = 0.48f)
+                            )
+                        } else {
+                            listOf(
+                                Color.White.copy(alpha = 0.78f),
+                                Color.White.copy(alpha = 0.62f)
+                            )
+                        }
+                    )
+                )
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (theme.isDark) 0.35f else 0.95f),
+                                theme.accentColor.copy(alpha = 0.30f),
+                                Color.White.copy(alpha = 0.08f)
+                            )
+                        )
+                    ),
+                    dockShape
+                )
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            for (item in entries) {
+                val selected = currentTab == item.tab
+                val itemShape = RoundedCornerShape(22.dp)
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .clip(itemShape)
+                        .background(
+                            if (selected) {
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        theme.accentColor.copy(alpha = if (theme.isDark) 0.28f else 0.20f),
+                                        theme.accentColor.copy(alpha = 0.08f)
+                                    )
+                                )
+                            } else {
+                                Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
+                            }
+                        )
+                        .let { mod ->
+                            if (selected) {
+                                mod.border(
+                                    BorderStroke(1.dp, theme.accentColor.copy(alpha = 0.45f)),
+                                    itemShape
+                                )
+                            } else mod
+                        }
+                        .clickable { onSelectTab(item.tab) }
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                        .testTag(item.testTag),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        tint = if (selected) theme.accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) {
+                            if (theme.isDark) Color.White else theme.accentColor
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

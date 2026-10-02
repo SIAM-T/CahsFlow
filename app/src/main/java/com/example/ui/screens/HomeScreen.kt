@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,14 +47,11 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,7 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -76,8 +79,11 @@ import com.example.data.local.TransactionType
 import com.example.domain.FinancialSnapshot
 import com.example.ui.components.FriendlyEmptyState
 import com.example.ui.components.GlassCard
+import com.example.ui.components.GlassChip
+import com.example.ui.components.GlassIconButton
 import com.example.ui.components.QuickActionGlassButton
 import com.example.ui.components.colorForTransactionType
+import com.example.ui.components.glassTextFieldColors
 import com.example.ui.components.iconForTransactionType
 import com.example.ui.theme.FinanceExpense
 import com.example.ui.theme.FinanceIncome
@@ -132,7 +138,7 @@ fun HomeScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Top Greeting & Action Bar
+        // 1. Top Greeting & Translucent Glass Action Bar
         item(key = "header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -143,7 +149,8 @@ fun HomeScreen(
                     Text(
                         text = greeting,
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = strings.moneyOverview,
@@ -151,39 +158,20 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GlassIconButton(
+                        icon = Icons.Default.Search,
+                        contentDescription = "Search",
                         onClick = onOpenSearch,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .size(44.dp)
-                            .testTag("home_search_button")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                    Surface(
+                        modifier = Modifier.testTag("home_search_button")
+                    )
+                    GlassIconButton(
+                        icon = Icons.Default.DashboardCustomize,
+                        contentDescription = "Customize Dashboard",
                         onClick = { showCustomizeModal = true },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .size(44.dp)
-                            .testTag("home_customize_button")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.DashboardCustomize,
-                                contentDescription = "Customize Dashboard",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("home_customize_button")
+                    )
                 }
             }
         }
@@ -278,6 +266,7 @@ private fun FirstLaunchSetupCard(
 
     GlassCard(
         tintColor = MaterialTheme.colorScheme.primary,
+        cornerRadius = 28.dp,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("first_launch_card")
@@ -309,37 +298,38 @@ private fun FirstLaunchSetupCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             text = strings.chooseCurrency,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             for (pair in currencies) {
-                FilterChip(
+                GlassChip(
                     selected = selectedCurrency == pair,
+                    label = "${pair.first} ${pair.second}",
                     onClick = { selectedCurrency = pair },
-                    label = { Text("${pair.first} ${pair.second}") },
                     modifier = Modifier.testTag("currency_chip_${pair.second}")
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = startingBalanceInput,
             onValueChange = { startingBalanceInput = it },
             label = { Text("${strings.startingCashBalance} (${selectedCurrency.first})") },
             singleLine = true,
+            colors = glassTextFieldColors(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("input_starting_cash_balance")
@@ -372,10 +362,10 @@ private fun FirstLaunchSetupCard(
                 val paisa = MoneyUtils.parseToPaisa(startingBalanceInput) ?: 0L
                 onComplete(selectedCurrency.first, selectedCurrency.second, paisa, includeDemoData)
             },
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(50.dp)
                 .testTag("get_started_button")
         ) {
             Icon(Icons.Default.Check, contentDescription = null)
@@ -396,11 +386,31 @@ private fun CashBalanceHeroCard(
     val strings = LocalHisabStrings.current
     val theme = LocalHisabTheme.current
 
+    val totalInOut = snapshot.reports.totalIncomePaisa + snapshot.reports.totalExpensePaisa
+    val incomeRatio = if (totalInOut > 0L) {
+        (snapshot.reports.totalIncomePaisa.toFloat() / totalInOut.toFloat()).coerceIn(0.08f, 0.92f)
+    } else 0.5f
+
     GlassCard(
         tintColor = theme.accentColor,
-        cornerRadius = 26.dp,
+        cornerRadius = 28.dp,
         modifier = Modifier
             .fillMaxWidth()
+            .drawBehind {
+                // Decorative glowing refraction rings inside the Hero Vault Card
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            theme.accentColor.copy(alpha = 0.22f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.88f, size.height * 0.18f),
+                        radius = size.width * 0.48f
+                    ),
+                    radius = size.width * 0.48f,
+                    center = Offset(size.width * 0.88f, size.height * 0.18f)
+                )
+            }
             .testTag("cash_balance_card")
     ) {
         Row(
@@ -410,45 +420,63 @@ private fun CashBalanceHeroCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
-                        .background(theme.accentColor.copy(alpha = 0.22f)),
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    theme.accentColor.copy(alpha = 0.35f),
+                                    theme.accentColor.copy(alpha = 0.10f)
+                                )
+                            )
+                        )
+                        .border(1.dp, theme.accentColor.copy(alpha = 0.5f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.AccountBalanceWallet,
                         contentDescription = strings.cashBalance,
                         tint = theme.accentColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-                Text(
-                    text = strings.cashBalance,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column {
+                    Text(
+                        text = strings.cashBalance,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Live Net Cash Position",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             if (snapshot.openingCashBalancePaisa > 0L) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = if (theme.isDark) 0.09f else 0.6f))
+                        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = "${strings.openingBalance}: ${MoneyUtils.formatPaisa(snapshot.openingCashBalancePaisa, currencySymbol)}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         Text(
             text = MoneyUtils.formatPaisa(snapshot.cashBalancePaisa, currencySymbol),
@@ -460,78 +488,124 @@ private fun CashBalanceHeroCard(
             modifier = Modifier.testTag("cash_balance_value")
         )
 
+        if (totalInOut > 0L) {
+            Spacer(modifier = Modifier.height(12.dp))
+            // Visual Cash Flow Ratio Bar (Income vs Expense)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(FinanceExpense.copy(alpha = 0.45f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(incomeRatio)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(FinanceIncome, Color(0xFF34D399))
+                            )
+                        )
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(14.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Total Income Pill
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = FinanceIncome.copy(alpha = 0.14f),
-                border = BorderStroke(1.dp, FinanceIncome.copy(alpha = 0.28f)),
+            // Total Income Glass Pill
+            GlassMetricPill(
+                label = strings.income,
+                amountText = MoneyUtils.formatPaisa(snapshot.reports.totalIncomePaisa, currencySymbol),
+                icon = Icons.Default.ArrowUpward,
+                color = FinanceIncome,
                 modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowUpward,
-                        contentDescription = strings.income,
-                        tint = FinanceIncome,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Column {
-                        Text(
-                            text = strings.income,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = MoneyUtils.formatPaisa(snapshot.reports.totalIncomePaisa, currencySymbol),
-                            style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = FinanceIncome,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
+            )
 
-            // Total Expense Pill
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = FinanceExpense.copy(alpha = 0.14f),
-                border = BorderStroke(1.dp, FinanceExpense.copy(alpha = 0.28f)),
+            // Total Expense Glass Pill
+            GlassMetricPill(
+                label = strings.expense,
+                amountText = MoneyUtils.formatPaisa(snapshot.reports.totalExpensePaisa, currencySymbol),
+                icon = Icons.Default.ArrowDownward,
+                color = FinanceExpense,
                 modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDownward,
-                        contentDescription = strings.expense,
-                        tint = FinanceExpense,
-                        modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GlassMetricPill(
+    label: String,
+    amountText: String,
+    icon: ImageVector,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val theme = LocalHisabTheme.current
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        color.copy(alpha = if (theme.isDark) 0.20f else 0.14f),
+                        Color.White.copy(alpha = if (theme.isDark) 0.03f else 0.45f)
                     )
-                    Column {
-                        Text(
-                            text = strings.expense,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            .border(
+                BorderStroke(
+                    1.dp,
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.30f),
+                            color.copy(alpha = 0.40f)
                         )
-                        Text(
-                            text = MoneyUtils.formatPaisa(snapshot.reports.totalExpensePaisa, currencySymbol),
-                            style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                            color = FinanceExpense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                    )
+                ),
+                shape
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.24f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = color,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = amountText,
+                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                    color = color,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -552,7 +626,8 @@ private fun QuickActionsDashboardCard(
         Text(
             text = strings.quickActionsTitle,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -664,7 +739,8 @@ private fun TodaySummaryCard(
         Text(
             text = strings.todayTitle,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -738,7 +814,8 @@ private fun CurrentPositionCard(
         Text(
             text = strings.currentPositionTitle,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -811,26 +888,54 @@ private fun MiniStatTile(
     testTag: String? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    Surface(
-        shape = shape,
-        color = color.copy(alpha = 0.11f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.25f)),
+    val theme = LocalHisabTheme.current
+    val shape = RoundedCornerShape(18.dp)
+    Box(
         modifier = modifier
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        color.copy(alpha = if (theme.isDark) 0.22f else 0.14f),
+                        Color.White.copy(alpha = if (theme.isDark) 0.03f else 0.50f)
+                    )
+                )
+            )
+            .border(
+                BorderStroke(
+                    1.dp,
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (theme.isDark) 0.30f else 0.85f),
+                            color.copy(alpha = 0.40f)
+                        )
+                    )
+                ),
+                shape
+            )
             .let { if (testTag != null) it.testTag(testTag) else it }
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(14.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Text(
                 text = MoneyUtils.formatPaisa(amountPaisa, currencySymbol),
                 style = MaterialTheme.typography.titleLarge.copy(
@@ -894,7 +999,8 @@ private fun RecentActivityDashboardSection(
             Text(
                 text = strings.recentActivityTitle,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold
             )
             if (recentTransactions.isNotEmpty()) {
                 TextButton(
@@ -923,7 +1029,7 @@ private fun RecentActivityDashboardSection(
             )
         } else {
             GlassCard(
-                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp)
+                contentPadding = PaddingValues(vertical = 10.dp, horizontal = 14.dp)
             ) {
                 recentTransactions.take(6).forEachIndexed { index, tx ->
                     TransactionRowItem(
@@ -933,7 +1039,7 @@ private fun RecentActivityDashboardSection(
                     )
                     if (index < recentTransactions.take(6).lastIndex) {
                         HorizontalDivider(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            color = Color.White.copy(alpha = 0.08f),
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
@@ -970,9 +1076,6 @@ fun TransactionRowItem(
         }
     }
 
-    val isPositiveDisplay = tx.direction == TransactionDirection.INFLOW.name ||
-        tType == TransactionType.SHOP_DUE
-
     val prefix = when {
         tType == TransactionType.EXPENSE ||
             tType == TransactionType.LEND ||
@@ -995,7 +1098,15 @@ fun TransactionRowItem(
             modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(color.copy(alpha = 0.18f)),
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            color.copy(alpha = 0.30f),
+                            color.copy(alpha = 0.10f)
+                        )
+                    )
+                )
+                .border(1.dp, color.copy(alpha = 0.45f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1031,7 +1142,7 @@ fun TransactionRowItem(
                     fontFamily = JetBrainsMonoFontFamily,
                     fontWeight = FontWeight.Bold
                 ),
-                color = if (isPositiveDisplay && prefix == "+") color else color
+                color = color
             )
             Text(
                 text = MoneyUtils.formatDateShort(tx.timestamp),
@@ -1062,6 +1173,7 @@ private fun DashboardCustomizerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
         title = {
             Text(if (isBn) "ড্যাশবোর্ড কাস্টমাইজ করুন" else "Customize Dashboard")
         },
@@ -1077,19 +1189,19 @@ private fun DashboardCustomizerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilterChip(
+                    GlassChip(
                         selected = settings.dashboardLayoutStyle == "GRID",
-                        onClick = { onChangeLayout("GRID") },
-                        label = { Text("2x2 Stat Grid") }
+                        label = "2x2 Stat Grid",
+                        onClick = { onChangeLayout("GRID") }
                     )
-                    FilterChip(
+                    GlassChip(
                         selected = settings.dashboardLayoutStyle == "COMPACT_LIST",
-                        onClick = { onChangeLayout("COMPACT_LIST") },
-                        label = { Text("Compact List") }
+                        label = "Compact List",
+                        onClick = { onChangeLayout("COMPACT_LIST") }
                     )
                 }
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
 
                 allCards.forEachIndexed { index, cardId ->
                     val visible = settings.isCardVisible(cardId)

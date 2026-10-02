@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -39,16 +40,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -60,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -73,7 +69,10 @@ import com.example.data.local.ShopEntity
 import com.example.data.local.TransactionType
 import com.example.domain.FinancialSnapshot
 import com.example.ui.components.GlassCard
+import com.example.ui.components.GlassChip
+import com.example.ui.components.GlassIconButton
 import com.example.ui.components.colorForTransactionType
+import com.example.ui.components.glassTextFieldColors
 import com.example.ui.components.iconForName
 import com.example.ui.components.iconForTransactionType
 import com.example.ui.theme.FinanceExpense
@@ -165,7 +164,8 @@ fun GlobalAddTransactionPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = if (theme.isDark) Color(0xFF0B1324).copy(alpha = 0.88f) else Color.White.copy(alpha = 0.90f),
+        scrimColor = Color.Black.copy(alpha = 0.55f)
     ) {
         Column(
             modifier = Modifier
@@ -184,7 +184,8 @@ fun GlobalAddTransactionPickerSheet(
                     Text(
                         text = if (isBn) "নতুন লেনদেন যোগ করুন" else "Add Transaction",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = if (isBn) "লেনদেনের ধরন নির্বাচন করুন" else "Choose transaction type in one tap",
@@ -192,15 +193,20 @@ fun GlobalAddTransactionPickerSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
-                }
+                GlassIconButton(
+                    icon = Icons.Default.Close,
+                    contentDescription = "Close",
+                    onClick = onDismiss
+                )
             }
 
             Spacer(modifier = Modifier.height(4.dp))
 
             for (opt in options) {
-                Surface(
+                GlassCard(
+                    tintColor = opt.color,
+                    cornerRadius = 20.dp,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
                     onClick = {
                         if (opt.isLoanModal) {
                             onDismiss()
@@ -209,17 +215,12 @@ fun GlobalAddTransactionPickerSheet(
                             onSelectType(opt.type)
                         }
                     },
-                    shape = RoundedCornerShape(18.dp),
-                    color = opt.color.copy(alpha = 0.10f),
-                    border = BorderStroke(1.dp, opt.color.copy(alpha = 0.28f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(opt.testTag)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
@@ -227,7 +228,15 @@ fun GlobalAddTransactionPickerSheet(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape)
-                                .background(opt.color.copy(alpha = 0.22f)),
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            opt.color.copy(alpha = 0.35f),
+                                            opt.color.copy(alpha = 0.12f)
+                                        )
+                                    )
+                                )
+                                .border(1.dp, opt.color.copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -241,7 +250,8 @@ fun GlobalAddTransactionPickerSheet(
                             Text(
                                 text = if (isBn) opt.titleBn else opt.titleEn,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = if (isBn) opt.subtitleBn else opt.subtitleEn,
@@ -302,7 +312,6 @@ fun QuickEntryBottomSheet(
         )
     }
 
-    // Category state (for INCOME / EXPENSE)
     val relevantCategories = remember(categories, selectedType) {
         val catType = if (selectedType == TransactionType.INCOME) "INCOME" else "EXPENSE"
         categories.filter { it.type == catType }
@@ -317,7 +326,6 @@ fun QuickEntryBottomSheet(
         )
     }
 
-    // Shop state (for SHOP_DUE / SHOP_PAYMENT)
     var selectedShopId by remember(request) {
         mutableStateOf(
             editingTx?.shopId ?: request.preselectedShopId ?: shops.firstOrNull()?.id
@@ -330,7 +338,6 @@ fun QuickEntryBottomSheet(
         mutableStateOf(shops.isEmpty())
     }
 
-    // Person state (for LEND / BORROW / RECEIVE_PAYMENT / MAKE_PAYMENT)
     var selectedPersonId by remember(request) {
         mutableStateOf(
             editingTx?.personId ?: request.preselectedPersonId ?: people.firstOrNull()?.id
@@ -343,7 +350,6 @@ fun QuickEntryBottomSheet(
         mutableStateOf(people.isEmpty())
     }
 
-    // Loan state
     var selectedLoanId by remember(request) {
         mutableStateOf(editingTx?.loanId ?: request.preselectedLoanId ?: loans.firstOrNull()?.id)
     }
@@ -377,7 +383,8 @@ fun QuickEntryBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = if (theme.isDark) Color(0xFF0B1324).copy(alpha = 0.88f) else Color.White.copy(alpha = 0.90f),
+        scrimColor = Color.Black.copy(alpha = 0.55f)
     ) {
         Column(
             modifier = Modifier
@@ -399,9 +406,17 @@ fun QuickEntryBottomSheet(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
-                            .background(typeAccentColor.copy(alpha = 0.2f)),
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        typeAccentColor.copy(alpha = 0.35f),
+                                        typeAccentColor.copy(alpha = 0.12f)
+                                    )
+                                )
+                            )
+                            .border(1.dp, typeAccentColor.copy(alpha = 0.5f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -418,7 +433,8 @@ fun QuickEntryBottomSheet(
                                 if (isBn) selectedType.labelBn else selectedType.labelEn
                             },
                             style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = if (isBn) "ন্যূনতম তথ্যে দ্রুত সংরক্ষণ করুন" else "Fast entry • Automatic balance calculation",
@@ -427,26 +443,25 @@ fun QuickEntryBottomSheet(
                         )
                     }
                 }
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (editingTx != null && onDeleteExisting != null) {
-                        IconButton(
+                        GlassIconButton(
+                            icon = Icons.Default.Delete,
+                            contentDescription = strings.delete,
+                            tint = FinanceExpense,
                             onClick = { showDeleteConfirm = true },
                             modifier = Modifier.testTag("delete_transaction_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = strings.delete,
-                                tint = FinanceExpense
-                            )
-                        }
+                        )
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = strings.cancel)
-                    }
+                    GlassIconButton(
+                        icon = Icons.Default.Close,
+                        contentDescription = strings.cancel,
+                        onClick = onDismiss
+                    )
                 }
             }
 
-            // Type Switcher Row (when creating or editing)
+            // Translucent Glass Type Switcher Row
             val quickTypes = listOf(
                 TransactionType.EXPENSE,
                 TransactionType.INCOME,
@@ -466,25 +481,20 @@ fun QuickEntryBottomSheet(
                 for (t in quickTypes) {
                     val selected = t == selectedType
                     val c = colorForTransactionType(t)
-                    FilterChip(
+                    GlassChip(
                         selected = selected,
+                        label = if (isBn) t.labelBn else t.labelEn,
+                        accentColor = c,
                         onClick = {
                             selectedType = t
                             validationError = null
                         },
-                        label = {
-                            Text(if (isBn) t.labelBn else t.labelEn)
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = c.copy(alpha = 0.22f),
-                            selectedLabelColor = c
-                        ),
                         modifier = Modifier.testTag("type_chip_${t.name.lowercase()}")
                     )
                 }
             }
 
-            // 1. Context Selector: SHOP (for SHOP_DUE / SHOP_PAYMENT)
+            // 1. Context Selector: SHOP
             if (selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -518,7 +528,8 @@ fun QuickEntryBottomSheet(
                             },
                             label = { Text(if (isBn) "দোকানের নাম (যেমন: Rahman Store)" else "Shop Name (e.g. Rahman Store)") },
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            colors = glassTextFieldColors(typeAccentColor),
+                            shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_shop_name")
@@ -530,20 +541,15 @@ fun QuickEntryBottomSheet(
                         ) {
                             for (shop in shops) {
                                 val isSel = shop.id == selectedShopId
-                                FilterChip(
+                                GlassChip(
                                     selected = isSel,
+                                    label = shop.name,
+                                    accentColor = FinanceShopDue,
+                                    leadingIcon = Icons.Default.Storefront,
                                     onClick = {
                                         selectedShopId = shop.id
                                         customShopName = shop.name
                                         validationError = null
-                                    },
-                                    label = { Text(shop.name) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Storefront,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
                                     },
                                     modifier = Modifier.testTag("shop_chip_${shop.name.lowercase().replace(" ", "_")}")
                                 )
@@ -576,7 +582,7 @@ fun QuickEntryBottomSheet(
                                     )
                                     Text(
                                         text = MoneyUtils.formatPaisa(currentDue, theme.currencySymbol),
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -588,7 +594,7 @@ fun QuickEntryBottomSheet(
                                     )
                                     Text(
                                         text = MoneyUtils.formatPaisa(projectedDue, theme.currencySymbol),
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                                         color = if (selectedType == TransactionType.SHOP_DUE) FinanceShopDue else FinanceIncome,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -599,7 +605,7 @@ fun QuickEntryBottomSheet(
                 }
             }
 
-            // 2. Context Selector: PERSON (for LEND / BORROW / RECEIVE_PAYMENT / MAKE_PAYMENT)
+            // 2. Context Selector: PERSON
             if (selectedType == TransactionType.LEND ||
                 selectedType == TransactionType.BORROW ||
                 selectedType == TransactionType.RECEIVE_PAYMENT ||
@@ -637,7 +643,8 @@ fun QuickEntryBottomSheet(
                             },
                             label = { Text(if (isBn) "ব্যক্তির নাম (যেমন: Rahim / Karim)" else "Person Name (e.g. Rahim / Karim)") },
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            colors = glassTextFieldColors(typeAccentColor),
+                            shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_person_name")
@@ -649,21 +656,21 @@ fun QuickEntryBottomSheet(
                         ) {
                             for (person in people) {
                                 val isSel = person.id == selectedPersonId
-                                FilterChip(
+                                GlassChip(
                                     selected = isSel,
+                                    label = person.name,
+                                    accentColor = typeAccentColor,
                                     onClick = {
                                         selectedPersonId = person.id
                                         customPersonName = person.name
                                         validationError = null
                                     },
-                                    label = { Text(person.name) },
                                     modifier = Modifier.testTag("person_chip_${person.name.lowercase().replace(" ", "_")}")
                                 )
                             }
                         }
                     }
 
-                    // Live Person Balance Preview
                     if (selectedPersonSummary != null && !isCreatingNewPersonInline) {
                         val isReceivableFlow = selectedType == TransactionType.LEND || selectedType == TransactionType.RECEIVE_PAYMENT
                         val currentBal = if (isReceivableFlow) {
@@ -699,7 +706,7 @@ fun QuickEntryBottomSheet(
                                     )
                                     Text(
                                         text = MoneyUtils.formatPaisa(currentBal, theme.currencySymbol),
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -711,7 +718,7 @@ fun QuickEntryBottomSheet(
                                     )
                                     Text(
                                         text = MoneyUtils.formatPaisa(projectedBal, theme.currencySymbol),
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                                         color = if (isReceivableFlow) FinanceReceivable else FinancePayable,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -722,7 +729,7 @@ fun QuickEntryBottomSheet(
                 }
             }
 
-            // 3. Context Selector: CATEGORY (for INCOME / EXPENSE)
+            // 3. Context Selector: CATEGORY
             if (selectedType == TransactionType.INCOME || selectedType == TransactionType.EXPENSE) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -736,17 +743,12 @@ fun QuickEntryBottomSheet(
                     ) {
                         for (cat in relevantCategories) {
                             val isSel = cat.id == selectedCategoryId
-                            FilterChip(
+                            GlassChip(
                                 selected = isSel,
+                                label = if (isBn && cat.nameBn.isNotEmpty()) cat.nameBn else cat.name,
+                                accentColor = typeAccentColor,
+                                leadingIcon = iconForName(cat.iconName),
                                 onClick = { selectedCategoryId = cat.id },
-                                label = { Text(if (isBn && cat.nameBn.isNotEmpty()) cat.nameBn else cat.name) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = iconForName(cat.iconName),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
                                 modifier = Modifier.testTag("category_chip_${cat.name.lowercase().replace("/", "_").replace(" ", "_")}")
                             )
                         }
@@ -754,7 +756,7 @@ fun QuickEntryBottomSheet(
                 }
             }
 
-            // 4. Amount Input + Fast Amount Chips
+            // 4. Amount Input + Fast Amount Glass Chips
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = amountText,
@@ -765,18 +767,18 @@ fun QuickEntryBottomSheet(
                     label = { Text("${strings.amountLabel} (${theme.currencySymbol})") },
                     placeholder = { Text("500") },
                     singleLine = true,
+                    colors = glassTextFieldColors(typeAccentColor),
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
                         fontFamily = JetBrainsMonoFontFamily,
                         fontWeight = FontWeight.Bold
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("input_amount")
                 )
 
-                // Quick Preset Amount Chips (+100, +200, +500, +1000, +5000)
                 val presets = listOf(100L, 200L, 500L, 1000L, 5000L)
                 Row(
                     modifier = Modifier
@@ -785,28 +787,22 @@ fun QuickEntryBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     for (preset in presets) {
-                        Surface(
+                        GlassChip(
+                            selected = false,
+                            label = "+${theme.currencySymbol}$preset",
+                            accentColor = typeAccentColor,
                             onClick = {
                                 val currentWhole = (MoneyUtils.parseToPaisa(amountText) ?: 0L) / 100L
                                 amountText = (currentWhole + preset).toString()
                                 validationError = null
                             },
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                             modifier = Modifier.testTag("quick_amount_$preset")
-                        ) {
-                            Text(
-                                text = "+${theme.currencySymbol}$preset",
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                        )
                     }
                 }
             }
 
-            // 5. Product / Description Input + Smart Suggestions!
+            // 5. Product / Description Input + Smart Suggestions
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val descLabel = when (selectedType) {
                     TransactionType.SHOP_DUE -> if (isBn) "পণ্য / বিবরণ (যেমন: Rice, Oil)" else "Product / Description (e.g. Rice, Oil)"
@@ -819,13 +815,13 @@ fun QuickEntryBottomSheet(
                     onValueChange = { productOrDescription = it },
                     label = { Text(descLabel) },
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
+                    colors = glassTextFieldColors(typeAccentColor),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("input_product_description")
                 )
 
-                // Smart UX Suggestions based on Shop or Category
                 val suggestions: List<String> = remember(selectedType, selectedShop, selectedCategory) {
                     when (selectedType) {
                         TransactionType.SHOP_DUE -> selectedShop?.recentProductList()
@@ -851,10 +847,11 @@ fun QuickEntryBottomSheet(
                     ) {
                         for (sug in suggestions) {
                             val active = productOrDescription.equals(sug, ignoreCase = true)
-                            FilterChip(
+                            GlassChip(
                                 selected = active,
+                                label = sug,
+                                accentColor = typeAccentColor,
                                 onClick = { productOrDescription = sug },
-                                label = { Text(sug) },
                                 modifier = Modifier.testTag("suggestion_chip_${sug.lowercase().replace(" ", "_")}")
                             )
                         }
@@ -862,7 +859,7 @@ fun QuickEntryBottomSheet(
                 }
             }
 
-            // 6. Optional Due Date chips for Lending / Borrowing / Shop Due
+            // 6. Optional Due Date chips
             if (selectedType == TransactionType.LEND ||
                 selectedType == TransactionType.BORROW ||
                 selectedType == TransactionType.SHOP_DUE
@@ -873,13 +870,17 @@ fun QuickEntryBottomSheet(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         val options = listOf(null to "None", 3 to "In 3 Days", 7 to "In 7 Days", 15 to "In 15 Days", 30 to "In 30 Days")
                         for ((days, label) in options) {
-                            FilterChip(
+                            GlassChip(
                                 selected = dueDaysOffset == days,
-                                onClick = { dueDaysOffset = days },
-                                label = { Text(label) }
+                                label = label,
+                                accentColor = typeAccentColor,
+                                onClick = { dueDaysOffset = days }
                             )
                         }
                     }
@@ -966,7 +967,7 @@ fun QuickEntryBottomSheet(
                         dueMillis
                     )
                 },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = typeAccentColor,
                     contentColor = Color.White
@@ -990,6 +991,7 @@ fun QuickEntryBottomSheet(
     if (showDeleteConfirm && editingTx != null && onDeleteExisting != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
             title = { Text("Delete Transaction?") },
             text = {
                 Text("Deleting this transaction will automatically recalculate all affected balances, dues, and reports.")

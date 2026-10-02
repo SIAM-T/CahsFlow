@@ -186,9 +186,9 @@ data class AppSettingsEntity(
     val themeMode: String = "DARK", // LIGHT, DARK, SYSTEM, AMOLED
     val accentColorHex: String = "#10B981",
     val backgroundStyle: String = "HERO_ART", // HERO_ART, GRADIENT, SOLID
-    val glassTransparency: Int = 78, // 0..100
-    val glassBlurAmount: Int = 65, // 0..100
-    val cardOpacity: Int = 84, // 0..100
+    val glassTransparency: Int = 88, // 0..100
+    val glassBlurAmount: Int = 75, // 0..100
+    val cardOpacity: Int = 48, // 0..100 (lower = more translucent glass)
     val uiDensity: String = "COMFORTABLE", // COMFORTABLE, COMPACT
     val languageCode: String = "en", // "en" or "bn"
     val dashboardCardsOrder: String = "CASH_HERO,TODAY_SUMMARY,CURRENT_POSITION,QUICK_ACTIONS,RECENT_ACTIVITY",

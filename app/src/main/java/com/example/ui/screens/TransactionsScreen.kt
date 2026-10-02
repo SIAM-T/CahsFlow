@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,8 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,13 +47,13 @@ import com.example.data.local.DateFilterPreset
 import com.example.data.local.SortOption
 import com.example.data.local.TransactionEntity
 import com.example.data.local.TransactionFilterGroup
-import com.example.data.local.TransactionType
 import com.example.ui.components.FriendlyEmptyState
 import com.example.ui.components.GlassCard
+import com.example.ui.components.GlassChip
+import com.example.ui.components.glassTextFieldColors
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalHisabStrings
 import com.example.ui.theme.LocalHisabTheme
-import com.example.ui.viewmodel.QuickEntryRequest
 import com.example.ui.viewmodel.TransactionsFilterState
 import com.example.util.MoneyUtils
 
@@ -93,7 +90,7 @@ fun TransactionsScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 1. Header + Sort Menu
+        // 1. Header + Translucent Sort Pill
         item(key = "tx_header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -104,10 +101,11 @@ fun TransactionsScreen(
                     Text(
                         text = strings.navTransactions,
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${transactions.size} shown of $totalTransactionsCount total • Sum: ${
+                        text = "${transactions.size} of $totalTransactionsCount • Total: ${
                             MoneyUtils.formatPaisa(filteredSumPaisa, theme.currencySymbol)
                         }",
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMonoFontFamily),
@@ -116,23 +114,13 @@ fun TransactionsScreen(
                 }
 
                 Row {
-                    OutlinedButton(
+                    GlassChip(
+                        selected = true,
+                        label = if (isBn) filterState.sortOption.labelBn else filterState.sortOption.labelEn,
+                        leadingIcon = Icons.AutoMirrored.Filled.Sort,
                         onClick = { showSortMenu = true },
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         modifier = Modifier.testTag("sort_dropdown_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "Sort",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isBn) filterState.sortOption.labelBn else filterState.sortOption.labelEn,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
+                    )
 
                     DropdownMenu(
                         expanded = showSortMenu,
@@ -152,7 +140,7 @@ fun TransactionsScreen(
             }
         }
 
-        // 2. Global Search Bar
+        // 2. Translucent Global Search Bar
         item(key = "tx_search_bar") {
             OutlinedTextField(
                 value = filterState.searchQuery,
@@ -169,14 +157,15 @@ fun TransactionsScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(18.dp),
+                colors = glassTextFieldColors(),
+                shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("global_search_input")
             )
         }
 
-        // 3. Date Filter Presets Row (Today, Yesterday, This Week, This Month, Last Month, Custom)
+        // 3. Date Filter Presets Row
         item(key = "tx_date_filters") {
             Row(
                 modifier = Modifier
@@ -192,8 +181,9 @@ fun TransactionsScreen(
                     modifier = Modifier.size(18.dp)
                 )
                 for (preset in DateFilterPreset.entries) {
-                    FilterChip(
+                    GlassChip(
                         selected = filterState.datePreset == preset,
+                        label = if (isBn) preset.labelBn else preset.labelEn,
                         onClick = {
                             if (preset == DateFilterPreset.CUSTOM) {
                                 showCustomDateDialog = true
@@ -201,14 +191,13 @@ fun TransactionsScreen(
                                 onDatePresetChange(preset, null, null)
                             }
                         },
-                        label = { Text(if (isBn) preset.labelBn else preset.labelEn) },
                         modifier = Modifier.testTag("date_filter_${preset.name.lowercase()}")
                     )
                 }
             }
         }
 
-        // 4. Category/Type Group Filters Row (Income, Expense, Lending, Borrowing, Shop Due, Payments, Loans)
+        // 4. Category/Type Group Filters Row
         item(key = "tx_type_filters") {
             Row(
                 modifier = Modifier
@@ -224,10 +213,10 @@ fun TransactionsScreen(
                     modifier = Modifier.size(18.dp)
                 )
                 for (group in TransactionFilterGroup.entries) {
-                    FilterChip(
+                    GlassChip(
                         selected = filterState.filterGroup == group,
+                        label = if (isBn) group.labelBn else group.labelEn,
                         onClick = { onFilterGroupChange(group) },
-                        label = { Text(if (isBn) group.labelBn else group.labelEn) },
                         modifier = Modifier.testTag("group_filter_${group.name.lowercase()}")
                     )
                 }
@@ -264,7 +253,7 @@ fun TransactionsScreen(
         } else {
             items(items = transactions, key = { it.id }) { tx ->
                 GlassCard(
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                     onClick = { onEditTransaction(tx) }
                 ) {
                     TransactionRowItem(
@@ -296,7 +285,7 @@ fun TransactionsScreen(
                 item(key = "load_more") {
                     OutlinedButton(
                         onClick = onLoadMore,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("load_more_transactions_button")
@@ -312,6 +301,7 @@ fun TransactionsScreen(
         var daysBackText by remember { mutableStateOf("14") }
         AlertDialog(
             onDismissRequest = { showCustomDateDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
             title = { Text("Custom Date Range") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -323,6 +313,7 @@ fun TransactionsScreen(
                         value = daysBackText,
                         onValueChange = { daysBackText = it },
                         label = { Text("Number of days (e.g. 7, 14, 30, 90)") },
+                        colors = glassTextFieldColors(),
                         singleLine = true
                     )
                 }

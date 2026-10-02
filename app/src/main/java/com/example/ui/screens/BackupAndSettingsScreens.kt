@@ -637,15 +637,15 @@ fun CustomizationSubScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Card Opacity: ${settings.cardOpacity}%",
+                    text = "Card Glass Frost: ${settings.cardOpacity}%",
                     style = MaterialTheme.typography.labelLarge
                 )
                 Slider(
-                    value = settings.cardOpacity.toFloat(),
+                    value = settings.cardOpacity.toFloat().coerceIn(20f, 85f),
                     onValueChange = { v ->
                         onUpdateSettings { it.copy(cardOpacity = v.toInt()) }
                     },
-                    valueRange = 50f..98f
+                    valueRange = 20f..85f
                 )
 
                 Text(
