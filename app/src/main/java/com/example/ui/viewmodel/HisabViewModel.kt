@@ -13,8 +13,10 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.DateFilterPreset
 import com.example.data.local.HisabDatabase
 import com.example.data.local.LoanEntity
+import com.example.data.local.NoteChecklistItem
 import com.example.data.local.PersonEntity
 import com.example.data.local.ShopEntity
+import com.example.data.local.SmartNoteEntity
 import com.example.data.local.SortOption
 import com.example.data.local.TransactionDirection
 import com.example.data.local.TransactionEntity
@@ -24,6 +26,7 @@ import com.example.data.repository.HisabRepository
 import com.example.domain.FinancialEngine
 import com.example.domain.FinancialSnapshot
 import com.example.util.MoneyUtils
+import com.example.util.NoteNotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -44,11 +47,13 @@ enum class MainNavTab {
     TRANSACTIONS,
     PEOPLE,
     SHOPS,
+    NOTES,
     MORE
 }
 
 enum class MoreSubScreen {
     HUB,
+    NOTES,
     LOANS,
     REPORTS,
     CATEGORIES,
@@ -70,7 +75,10 @@ data class QuickEntryRequest(
     val preselectedPersonId: String? = null,
     val preselectedLoanId: String? = null,
     val preselectedCategoryId: String? = null,
-    val editingTransaction: TransactionEntity? = null
+    val editingTransaction: TransactionEntity? = null,
+    val initialAmountPaisa: Long? = null,
+    val initialDescription: String? = null,
+    val initialNote: String? = null
 )
 
 data class TransactionsFilterState(
@@ -91,6 +99,7 @@ data class HisabUiState(
     val people: List<PersonEntity> = emptyList(),
     val shops: List<ShopEntity> = emptyList(),
     val loans: List<LoanEntity> = emptyList(),
+    val notes: List<SmartNoteEntity> = emptyList(),
     val allTransactionsCount: Int = 0,
     val recentTransactions: List<TransactionEntity> = emptyList(),
     val filteredTransactions: List<TransactionEntity> = emptyList(),
@@ -163,8 +172,9 @@ class HisabViewModel(
         coreDataFlow,
         repository.loansFlow,
         repository.transactionsFlow,
+        repository.notesFlow,
         _filterState
-    ) { core, loans, transactions, filter ->
+    ) { core, loans, transactions, notes, filter ->
         val snapshot = FinancialEngine.calculateSnapshot(
             settings = core.settings,
             transactions = transactions,
@@ -185,6 +195,7 @@ class HisabViewModel(
             people = core.people,
             shops = core.shops,
             loans = loans,
+            notes = notes,
             allTransactionsCount = transactions.size,
             recentTransactions = transactions.take(12),
             filteredTransactions = paged,
@@ -417,6 +428,26 @@ class HisabViewModel(
             showBannerMessage("This transaction could not be saved. Please enter a valid amount greater than 0.")
             return
         }
+
+        val currentState = uiState.value
+        val validationError = FinancialEngine.validateTransactionProposal(
+            snapshot = currentState.snapshot,
+            existingTx = existingTx,
+            type = type,
+            amountPaisa = amountPaisa,
+            shopId = shopId,
+            shopName = shopName,
+            personId = personId,
+            personName = personName,
+            loanId = loanId,
+            currencySymbol = currentState.settings.currencySymbol,
+            adjustmentIsOutflow = adjustmentIsOutflow
+        )
+        if (validationError != null) {
+            showBannerMessage(validationError)
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val direction = if (type == TransactionType.ADJUSTMENT) {
@@ -507,6 +538,20 @@ class HisabViewModel(
 
     fun deleteTransactionWithUndo(txId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            val currentState = uiState.value
+            val targetTx = currentState.filteredTransactions.find { it.id == txId }
+                ?: currentState.recentTransactions.find { it.id == txId }
+            if (targetTx != null) {
+                val delError = FinancialEngine.validateTransactionDeletion(
+                    snapshot = currentState.snapshot,
+                    txToDelete = targetTx,
+                    currencySymbol = currentState.settings.currencySymbol
+                )
+                if (delError != null) {
+                    showBannerMessage(delError)
+                    return@launch
+                }
+            }
             val deleted = repository.deleteTransaction(txId)
             if (deleted != null) {
                 postUndoable(UndoableOperation.DeletedTransaction(deleted, "Transaction deleted"))
@@ -650,7 +695,18 @@ class HisabViewModel(
         dueDateMillis: Long?,
         note: String
     ) {
-        if (principalPaisa <= 0L || personName.isBlank()) return
+        val currentState = uiState.value
+        val loanError = FinancialEngine.validateLoanCreation(
+            snapshot = currentState.snapshot,
+            isLentByMe = isLentByMe,
+            principalPaisa = principalPaisa,
+            personName = personName,
+            currencySymbol = currentState.settings.currencySymbol
+        )
+        if (loanError != null) {
+            showBannerMessage(loanError)
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             var resolvedPersonId = personId
             val cleanName = personName.trim()
@@ -745,8 +801,205 @@ class HisabViewModel(
     // --- Settings & Customization Updates ---
     fun updateSettings(transform: (AppSettingsEntity) -> AppSettingsEntity) {
         viewModelScope.launch(Dispatchers.IO) {
+            val currentState = uiState.value
+            val currentSettings = currentState.settings
+            val proposed = transform(currentSettings)
+            if (proposed.openingCashBalancePaisa != currentSettings.openingCashBalancePaisa) {
+                val netDelta = currentState.snapshot.cashBalancePaisa - currentSettings.openingCashBalancePaisa
+                val newProjectedCash = proposed.openingCashBalancePaisa + netDelta
+                if (newProjectedCash < 0L) {
+                    val minRequiredOpening = (-netDelta).coerceAtLeast(0L)
+                    showBannerMessage(
+                        "Cannot set Opening Balance below ${MoneyUtils.formatPaisa(minRequiredOpening, proposed.currencySymbol)} because that cash has already been spent or lent out."
+                    )
+                    return@launch
+                }
+            }
             repository.updateSettings(transform)
         }
+    }
+
+    // --- Smart Notes, Financial Checklists & Real-Time Notifications ---
+    fun saveSmartNote(
+        context: Context,
+        existingNote: SmartNoteEntity?,
+        title: String,
+        content: String,
+        checklistItems: List<NoteChecklistItem>,
+        colorHex: String,
+        priority: String,
+        labelsCsv: String,
+        isPinned: Boolean,
+        isPinnedToNotification: Boolean,
+        reminderMillis: Long?,
+        repeatInterval: String,
+        linkedTransactionType: String?,
+        linkedEntityId: String?,
+        linkedEntityName: String?,
+        targetBudgetPaisa: Long,
+        fireRealtimeAlertNow: Boolean = false
+    ) {
+        val cleanTitle = title.trim().ifEmpty {
+            checklistItems.firstOrNull()?.text?.take(32) ?: "Smart Note"
+        }
+        val now = System.currentTimeMillis()
+        val allChecked = checklistItems.isNotEmpty() && checklistItems.all { it.isChecked }
+        val note = SmartNoteEntity(
+            id = existingNote?.id ?: "note_${UUID.randomUUID().toString().replace("-", "").take(10)}",
+            title = cleanTitle,
+            content = content.trim(),
+            checklistJson = SmartNoteEntity.serializeChecklist(checklistItems),
+            colorHex = colorHex,
+            priority = priority,
+            labelsCsv = labelsCsv.trim(),
+            isPinned = isPinned,
+            isArchived = existingNote?.isArchived ?: false,
+            isPinnedToNotification = isPinnedToNotification,
+            reminderMillis = reminderMillis,
+            repeatInterval = repeatInterval,
+            linkedTransactionType = linkedTransactionType,
+            linkedEntityId = linkedEntityId,
+            linkedEntityName = linkedEntityName,
+            targetBudgetPaisa = targetBudgetPaisa.coerceAtLeast(0L),
+            isCompleted = allChecked,
+            updatedAt = now,
+            createdAt = existingNote?.createdAt ?: now
+        )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveSmartNote(note)
+            val sym = uiState.value.settings.currencySymbol
+            NoteNotificationHelper.syncOngoingPinnedNotification(context, note, sym)
+            NoteNotificationHelper.scheduleNoteReminder(context, note, sym)
+            if (fireRealtimeAlertNow) {
+                NoteNotificationHelper.postRealtimeNoteNotification(
+                    context = context,
+                    note = note,
+                    currencySymbol = sym,
+                    customHeader = "🔔 Smart Note Saved"
+                )
+            }
+            showBannerMessage(
+                if (isPinnedToNotification) "Note saved & pinned live to status bar"
+                else if (reminderMillis != null && reminderMillis > now) "Note saved & reminder alarm scheduled"
+                else "Smart note saved"
+            )
+        }
+    }
+
+    fun toggleNoteChecklistItem(context: Context, note: SmartNoteEntity, itemId: String) {
+        val updatedItems = note.checklistItems().map { item ->
+            if (item.id == itemId) item.copy(isChecked = !item.isChecked) else item
+        }
+        val allDone = updatedItems.isNotEmpty() && updatedItems.all { it.isChecked }
+        val updatedNote = note.copy(
+            checklistJson = SmartNoteEntity.serializeChecklist(updatedItems),
+            isCompleted = allDone,
+            updatedAt = System.currentTimeMillis()
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveSmartNote(updatedNote)
+            val sym = uiState.value.settings.currencySymbol
+            NoteNotificationHelper.syncOngoingPinnedNotification(context, updatedNote, sym)
+            if (allDone) {
+                NoteNotificationHelper.postRealtimeNoteNotification(
+                    context = context,
+                    note = updatedNote,
+                    currencySymbol = sym,
+                    customHeader = "✅ Checklist Completed"
+                )
+            }
+        }
+    }
+
+    fun toggleNotePin(note: SmartNoteEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveSmartNote(
+                note.copy(isPinned = !note.isPinned, updatedAt = System.currentTimeMillis())
+            )
+        }
+    }
+
+    fun toggleNoteArchive(context: Context, note: SmartNoteEntity) {
+        val newArchived = !note.isArchived
+        val updated = note.copy(
+            isArchived = newArchived,
+            isPinnedToNotification = if (newArchived) false else note.isPinnedToNotification,
+            updatedAt = System.currentTimeMillis()
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveSmartNote(updated)
+            NoteNotificationHelper.syncOngoingPinnedNotification(context, updated, uiState.value.settings.currencySymbol)
+            showBannerMessage(if (newArchived) "Note archived" else "Note restored from archive")
+        }
+    }
+
+    fun toggleNoteLiveStatusBarPin(context: Context, note: SmartNoteEntity) {
+        val newPin = !note.isPinnedToNotification
+        val updated = note.copy(
+            isPinnedToNotification = newPin,
+            updatedAt = System.currentTimeMillis()
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveSmartNote(updated)
+            val sym = uiState.value.settings.currencySymbol
+            NoteNotificationHelper.syncOngoingPinnedNotification(context, updated, sym)
+            showBannerMessage(
+                if (newPin) "📌 Note pinned live to Android notification shade!"
+                else "Unpinned from notification shade"
+            )
+        }
+    }
+
+    fun triggerInstantNoteNotification(context: Context, note: SmartNoteEntity) {
+        val sym = uiState.value.settings.currencySymbol
+        val posted = NoteNotificationHelper.postRealtimeNoteNotification(
+            context = context,
+            note = note,
+            currencySymbol = sym,
+            customHeader = "⚡ Real-Time Alert"
+        )
+        if (posted) {
+            showBannerMessage("🔔 Real-time notification sent for '${note.title}'!")
+        } else {
+            showBannerMessage("Please allow notification permission to receive real-time alerts.")
+        }
+    }
+
+    fun deleteSmartNote(context: Context, noteId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            NoteNotificationHelper.cancelNoteNotifications(context, noteId)
+            repository.deleteSmartNote(noteId)
+            showBannerMessage("Note deleted")
+        }
+    }
+
+    fun convertNoteToTransaction(note: SmartNoteEntity) {
+        val txType = note.linkedTransactionType?.let { TransactionType.fromString(it) } ?: TransactionType.EXPENSE
+        val items = note.checklistItems()
+        val checkedAmount = note.checklistCheckedPaisa()
+        val totalAmount = note.effectiveTotalPaisa()
+        val amountToUse = if (checkedAmount > 0L) checkedAmount else totalAmount
+
+        val summaryDesc = buildString {
+            append(note.title)
+            val chosenItems = items.filter { it.isChecked }.ifEmpty { items }
+            if (chosenItems.isNotEmpty()) {
+                append(": ")
+                append(chosenItems.take(4).joinToString(", ") { it.text })
+            }
+        }
+
+        openQuickEntry(
+            QuickEntryRequest(
+                initialType = txType,
+                preselectedShopId = if (txType == TransactionType.SHOP_DUE || txType == TransactionType.SHOP_PAYMENT) note.linkedEntityId else null,
+                preselectedPersonId = if (txType in listOf(TransactionType.LEND, TransactionType.BORROW, TransactionType.RECEIVE_PAYMENT, TransactionType.MAKE_PAYMENT)) note.linkedEntityId else null,
+                initialAmountPaisa = amountToUse.takeIf { it > 0L },
+                initialDescription = summaryDesc,
+                initialNote = note.content
+            )
+        )
     }
 
     fun toggleDashboardCardVisibility(cardId: String) {

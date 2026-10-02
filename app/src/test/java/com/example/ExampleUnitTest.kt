@@ -211,4 +211,156 @@ class ExampleUnitTest {
         // Total Payable = Karim(3,000) + KarimLoan(7,000) = 10,000
         assertEquals(10000_00L, snapshot.totalPayablePaisa)
     }
+
+    @Test
+    fun financialEngine_blocksGivingOrSpendingMoreThanAvailableCashAndBlocksOverpayments() {
+        val now = 1790867000000L
+        // User has only 200 in cash
+        val settings = AppSettingsEntity(
+            currencySymbol = "$",
+            currencyCode = "USD",
+            openingCashBalancePaisa = 200_00L
+        )
+        val rahmanShop = ShopEntity(id = "shop_1", name = "Rahman Store")
+        val rahim = PersonEntity(id = "person_rahim", name = "Rahim")
+        val karim = PersonEntity(id = "person_karim", name = "Karim")
+
+        val txs = listOf(
+            // Shop due of $150
+            TransactionEntity(
+                id = "tx_due_150",
+                type = TransactionType.SHOP_DUE.name,
+                direction = TransactionDirection.CREDIT_EXTENDED.name,
+                amountPaisa = 150_00L,
+                timestamp = now,
+                shopId = rahmanShop.id,
+                shopName = rahmanShop.name,
+                productOrDescription = "Rice"
+            ),
+            // Borrowed $100 from Karim (increases cash to $300, payable to Karim = $100)
+            TransactionEntity(
+                id = "tx_borrow_100",
+                type = TransactionType.BORROW.name,
+                direction = TransactionDirection.INFLOW.name,
+                amountPaisa = 100_00L,
+                timestamp = now,
+                personId = karim.id,
+                personName = karim.name
+            )
+        )
+
+        val snapshot = FinancialEngine.calculateSnapshot(
+            settings = settings,
+            transactions = txs,
+            shops = listOf(rahmanShop),
+            people = listOf(rahim, karim),
+            loans = emptyList(),
+            categories = HisabDatabase.defaultCategories(),
+            nowMillis = now
+        )
+
+        // Available cash is $200 + $100 = $300
+        assertEquals(300_00L, snapshot.cashBalancePaisa)
+
+        // 1. Attempting to Give/Lend $1,000 when having only $300 MUST BE REJECTED
+        val lend1000Error = FinancialEngine.validateTransactionProposal(
+            snapshot = snapshot,
+            existingTx = null,
+            type = TransactionType.LEND,
+            amountPaisa = 1000_00L,
+            shopId = null,
+            shopName = null,
+            personId = rahim.id,
+            personName = rahim.name,
+            loanId = null,
+            currencySymbol = "$"
+        )
+        org.junit.Assert.assertNotNull(lend1000Error)
+        val maxLendAllowed = FinancialEngine.computeMaxAllowedAmountPaisa(
+            snapshot = snapshot,
+            existingTx = null,
+            type = TransactionType.LEND,
+            shopId = null,
+            personId = rahim.id,
+            loanId = null
+        )
+        assertEquals(300_00L, maxLendAllowed)
+
+        // 2. Attempting to Spend $500 when having only $300 MUST BE REJECTED
+        val expense500Error = FinancialEngine.validateTransactionProposal(
+            snapshot = snapshot,
+            existingTx = null,
+            type = TransactionType.EXPENSE,
+            amountPaisa = 500_00L,
+            shopId = null,
+            shopName = null,
+            personId = null,
+            personName = null,
+            loanId = null,
+            currencySymbol = "$"
+        )
+        org.junit.Assert.assertNotNull(expense500Error)
+
+        // 3. Attempting to receive $250 from Rahman Store when due is only $150 MUST BE REJECTED
+        val shopOverpayError = FinancialEngine.validateTransactionProposal(
+            snapshot = snapshot,
+            existingTx = null,
+            type = TransactionType.SHOP_PAYMENT,
+            amountPaisa = 250_00L,
+            shopId = rahmanShop.id,
+            shopName = rahmanShop.name,
+            personId = null,
+            personName = null,
+            loanId = null,
+            currencySymbol = "$"
+        )
+        org.junit.Assert.assertNotNull(shopOverpayError)
+        assertEquals(
+            150_00L,
+            FinancialEngine.computeMaxAllowedAmountPaisa(
+                snapshot = snapshot,
+                existingTx = null,
+                type = TransactionType.SHOP_PAYMENT,
+                shopId = rahmanShop.id,
+                personId = null,
+                loanId = null
+            )
+        )
+
+        // 4. Attempting to repay Karim $180 when we only owe $100 MUST BE REJECTED
+        val repayOverpayError = FinancialEngine.validateTransactionProposal(
+            snapshot = snapshot,
+            existingTx = null,
+            type = TransactionType.MAKE_PAYMENT,
+            amountPaisa = 180_00L,
+            shopId = null,
+            shopName = null,
+            personId = karim.id,
+            personName = karim.name,
+            loanId = null,
+            currencySymbol = "$"
+        )
+        org.junit.Assert.assertNotNull(repayOverpayError)
+        assertEquals(
+            100_00L,
+            FinancialEngine.computeMaxAllowedAmountPaisa(
+                snapshot = snapshot,
+                existingTx = null,
+                type = TransactionType.MAKE_PAYMENT,
+                shopId = null,
+                personId = karim.id,
+                loanId = null
+            )
+        )
+
+        // 5. Creating a formal loan lent by me for $1,000 when cash is $300 MUST BE REJECTED
+        val loanCreateError = FinancialEngine.validateLoanCreation(
+            snapshot = snapshot,
+            isLentByMe = true,
+            principalPaisa = 1000_00L,
+            personName = "Rahim",
+            currencySymbol = "$"
+        )
+        org.junit.Assert.assertNotNull(loanCreateError)
+    }
 }

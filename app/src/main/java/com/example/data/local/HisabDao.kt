@@ -183,6 +183,34 @@ interface HisabDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveBackupMetadata(metadata: BackupMetadataEntity)
 
+    // --- Smart Notes & Tasks ---
+    @Query("SELECT * FROM smart_notes ORDER BY isPinned DESC, updatedAt DESC")
+    fun observeSmartNotes(): Flow<List<SmartNoteEntity>>
+
+    @Query("SELECT * FROM smart_notes ORDER BY isPinned DESC, updatedAt DESC")
+    suspend fun getAllSmartNotesOnce(): List<SmartNoteEntity>
+
+    @Query("SELECT * FROM smart_notes WHERE id = :id LIMIT 1")
+    suspend fun getSmartNoteById(id: String): SmartNoteEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSmartNote(note: SmartNoteEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSmartNotes(notes: List<SmartNoteEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSmartNotesIgnoreDuplicates(notes: List<SmartNoteEntity>)
+
+    @Update
+    suspend fun updateSmartNote(note: SmartNoteEntity)
+
+    @Query("DELETE FROM smart_notes WHERE id = :id")
+    suspend fun deleteSmartNoteById(id: String)
+
+    @Query("DELETE FROM smart_notes")
+    suspend fun deleteAllSmartNotes()
+
     // --- Atomic Restore Operations ---
     @Transaction
     suspend fun fullRestoreDatabase(
@@ -191,13 +219,15 @@ interface HisabDao {
         people: List<PersonEntity>,
         shops: List<ShopEntity>,
         loans: List<LoanEntity>,
-        transactions: List<TransactionEntity>
+        transactions: List<TransactionEntity>,
+        notes: List<SmartNoteEntity> = emptyList()
     ) {
         deleteAllTransactions()
         deleteAllLoans()
         deleteAllShops()
         deleteAllPeople()
         deleteAllCategories()
+        deleteAllSmartNotes()
 
         saveSettings(settings.copy(id = 1, isFirstLaunchCompleted = true))
         insertCategories(categories)
@@ -205,6 +235,9 @@ interface HisabDao {
         insertShops(shops)
         insertLoans(loans)
         insertTransactions(transactions)
+        if (notes.isNotEmpty()) {
+            insertSmartNotes(notes)
+        }
     }
 
     @Transaction
@@ -213,12 +246,16 @@ interface HisabDao {
         people: List<PersonEntity>,
         shops: List<ShopEntity>,
         loans: List<LoanEntity>,
-        transactions: List<TransactionEntity>
+        transactions: List<TransactionEntity>,
+        notes: List<SmartNoteEntity> = emptyList()
     ): Int {
         insertCategoriesIgnoreDuplicates(categories)
         insertPeopleIgnoreDuplicates(people)
         insertShopsIgnoreDuplicates(shops)
         insertLoansIgnoreDuplicates(loans)
+        if (notes.isNotEmpty()) {
+            insertSmartNotesIgnoreDuplicates(notes)
+        }
         val results = insertTransactionsIgnoreDuplicates(transactions)
         return results.count { it != -1L }
     }

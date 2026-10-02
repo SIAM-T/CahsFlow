@@ -13,9 +13,10 @@ import androidx.room.RoomDatabase
         ShopEntity::class,
         LoanEntity::class,
         AppSettingsEntity::class,
-        BackupMetadataEntity::class
+        BackupMetadataEntity::class,
+        SmartNoteEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class HisabDatabase : RoomDatabase() {

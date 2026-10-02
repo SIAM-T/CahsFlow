@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
@@ -70,6 +71,7 @@ import com.example.ui.screens.GlobalAddTransactionPickerSheet
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LoansSubScreen
 import com.example.ui.screens.MoreHubScreen
+import com.example.ui.screens.NotesScreen
 import com.example.ui.screens.PeopleScreen
 import com.example.ui.screens.QuickEntryBottomSheet
 import com.example.ui.screens.ReportsSubScreen
@@ -286,12 +288,92 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                             )
                         }
 
+                        MainNavTab.NOTES -> {
+                            NotesScreen(
+                                notes = uiState.notes,
+                                shops = uiState.shops,
+                                people = uiState.people,
+                                showBackButton = false,
+                                onSaveNote = { existing, title, content, items, colorHex, priority, labelsCsv, isPinned, isPinnedNotif, reminderMillis, repeat, linkedType, linkedId, linkedName, targetPaisa, fireNow ->
+                                    viewModel.saveSmartNote(
+                                        context = context,
+                                        existingNote = existing,
+                                        title = title,
+                                        content = content,
+                                        checklistItems = items,
+                                        colorHex = colorHex,
+                                        priority = priority,
+                                        labelsCsv = labelsCsv,
+                                        isPinned = isPinned,
+                                        isPinnedToNotification = isPinnedNotif,
+                                        reminderMillis = reminderMillis,
+                                        repeatInterval = repeat,
+                                        linkedTransactionType = linkedType,
+                                        linkedEntityId = linkedId,
+                                        linkedEntityName = linkedName,
+                                        targetBudgetPaisa = targetPaisa,
+                                        fireRealtimeAlertNow = fireNow
+                                    )
+                                },
+                                onToggleChecklistItem = { note, itemId ->
+                                    viewModel.toggleNoteChecklistItem(context, note, itemId)
+                                },
+                                onTogglePin = { note -> viewModel.toggleNotePin(note) },
+                                onToggleArchive = { note -> viewModel.toggleNoteArchive(context, note) },
+                                onToggleLiveStatusBarPin = { note -> viewModel.toggleNoteLiveStatusBarPin(context, note) },
+                                onTriggerInstantAlert = { note -> viewModel.triggerInstantNoteNotification(context, note) },
+                                onConvertNoteToTransaction = { note -> viewModel.convertNoteToTransaction(note) },
+                                onDeleteNote = { noteId -> viewModel.deleteSmartNote(context, noteId) }
+                            )
+                        }
+
                         MainNavTab.MORE -> {
                             when (moreSubScreen) {
                                 MoreSubScreen.HUB -> {
                                     MoreHubScreen(
                                         snapshot = uiState.snapshot,
+                                        activeNotesCount = uiState.notes.count { !it.isArchived },
                                         onSelectSubScreen = { sub -> viewModel.openMoreSubScreen(sub) }
+                                    )
+                                }
+
+                                MoreSubScreen.NOTES -> {
+                                    NotesScreen(
+                                        notes = uiState.notes,
+                                        shops = uiState.shops,
+                                        people = uiState.people,
+                                        showBackButton = true,
+                                        onBack = { viewModel.openMoreSubScreen(MoreSubScreen.HUB) },
+                                        onSaveNote = { existing, title, content, items, colorHex, priority, labelsCsv, isPinned, isPinnedNotif, reminderMillis, repeat, linkedType, linkedId, linkedName, targetPaisa, fireNow ->
+                                            viewModel.saveSmartNote(
+                                                context = context,
+                                                existingNote = existing,
+                                                title = title,
+                                                content = content,
+                                                checklistItems = items,
+                                                colorHex = colorHex,
+                                                priority = priority,
+                                                labelsCsv = labelsCsv,
+                                                isPinned = isPinned,
+                                                isPinnedToNotification = isPinnedNotif,
+                                                reminderMillis = reminderMillis,
+                                                repeatInterval = repeat,
+                                                linkedTransactionType = linkedType,
+                                                linkedEntityId = linkedId,
+                                                linkedEntityName = linkedName,
+                                                targetBudgetPaisa = targetPaisa,
+                                                fireRealtimeAlertNow = fireNow
+                                            )
+                                        },
+                                        onToggleChecklistItem = { note, itemId ->
+                                            viewModel.toggleNoteChecklistItem(context, note, itemId)
+                                        },
+                                        onTogglePin = { note -> viewModel.toggleNotePin(note) },
+                                        onToggleArchive = { note -> viewModel.toggleNoteArchive(context, note) },
+                                        onToggleLiveStatusBarPin = { note -> viewModel.toggleNoteLiveStatusBarPin(context, note) },
+                                        onTriggerInstantAlert = { note -> viewModel.triggerInstantNoteNotification(context, note) },
+                                        onConvertNoteToTransaction = { note -> viewModel.convertNoteToTransaction(note) },
+                                        onDeleteNote = { noteId -> viewModel.deleteSmartNote(context, noteId) }
                                     )
                                 }
 
@@ -301,6 +383,7 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                                         people = uiState.people,
                                         totalLoansGivenRemainingPaisa = uiState.snapshot.totalLoansGivenRemainingPaisa,
                                         totalLoansTakenRemainingPaisa = uiState.snapshot.totalLoansTakenRemainingPaisa,
+                                        availableCashPaisa = uiState.snapshot.cashBalancePaisa,
                                         onBack = { viewModel.openMoreSubScreen(MoreSubScreen.HUB) },
                                         onCreateLoan = { isLent, pId, pName, prin, intr, rate, inst, start, due, note ->
                                             viewModel.createLoan(isLent, pId, pName, prin, intr, rate, inst, start, due, note)
@@ -483,6 +566,7 @@ fun HisabAppRoot(viewModel: HisabViewModel) {
                 CreateLoanDialog(
                     people = uiState.people,
                     currencySymbol = uiState.settings.currencySymbol,
+                    availableCashPaisa = uiState.snapshot.cashBalancePaisa,
                     onDismiss = { showGlobalCreateLoanDialog = false },
                     onCreate = { isLent, pId, pName, principal, interest, rateStr, inst, dueMillis, note ->
                         viewModel.createLoan(
@@ -526,6 +610,7 @@ private fun FloatingGlassBottomBar(
         NavEntry(MainNavTab.TRANSACTIONS, strings.navTransactions, Icons.AutoMirrored.Filled.ReceiptLong, "nav_tab_transactions"),
         NavEntry(MainNavTab.PEOPLE, strings.navPeople, Icons.Default.People, "nav_tab_people"),
         NavEntry(MainNavTab.SHOPS, strings.navShops, Icons.Default.Storefront, "nav_tab_shops"),
+        NavEntry(MainNavTab.NOTES, strings.navNotes, Icons.Default.Checklist, "nav_tab_notes"),
         NavEntry(MainNavTab.MORE, strings.navMore, Icons.Default.MoreHoriz, "nav_tab_more")
     )
 

@@ -9,6 +9,7 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.LoanEntity
 import com.example.data.local.PersonEntity
 import com.example.data.local.ShopEntity
+import com.example.data.local.SmartNoteEntity
 import com.example.data.local.TransactionDirection
 import com.example.data.local.TransactionEntity
 import com.example.data.local.TransactionType
@@ -30,6 +31,7 @@ data class ValidatedBackupPayload(
     val shops: List<ShopEntity>,
     val loans: List<LoanEntity>,
     val transactions: List<TransactionEntity>,
+    val notes: List<SmartNoteEntity> = emptyList(),
     val duplicateIdsIgnoredInFile: Int = 0
 )
 
@@ -62,6 +64,7 @@ object BackupManager {
         shops: List<ShopEntity>,
         loans: List<LoanEntity>,
         transactions: List<TransactionEntity>,
+        notes: List<SmartNoteEntity> = emptyList(),
         nowMillis: Long = System.currentTimeMillis()
     ): String {
         val root = JSONObject()
@@ -197,6 +200,35 @@ object BackupManager {
             )
         }
         root.put("transactions", txArr)
+
+        // 7. Smart Notes & Checklists
+        val notesArr = JSONArray()
+        for (n in notes) {
+            notesArr.put(
+                JSONObject().apply {
+                    put("id", n.id)
+                    put("title", n.title)
+                    put("content", n.content)
+                    put("checklistJson", n.checklistJson)
+                    put("colorHex", n.colorHex)
+                    put("priority", n.priority)
+                    put("labelsCsv", n.labelsCsv)
+                    put("isPinned", n.isPinned)
+                    put("isArchived", n.isArchived)
+                    put("isPinnedToNotification", n.isPinnedToNotification)
+                    put("reminderMillis", n.reminderMillis ?: JSONObject.NULL)
+                    put("repeatInterval", n.repeatInterval)
+                    put("linkedTransactionType", n.linkedTransactionType ?: JSONObject.NULL)
+                    put("linkedEntityId", n.linkedEntityId ?: JSONObject.NULL)
+                    put("linkedEntityName", n.linkedEntityName ?: JSONObject.NULL)
+                    put("targetBudgetPaisa", n.targetBudgetPaisa)
+                    put("isCompleted", n.isCompleted)
+                    put("updatedAt", n.updatedAt)
+                    put("createdAt", n.createdAt)
+                }
+            )
+        }
+        root.put("notes", notesArr)
 
         return root.toString(2)
     }
@@ -428,6 +460,40 @@ object BackupManager {
                 )
             }
 
+            // Parse Smart Notes (optional for backward compatibility with v1 backups)
+            val notes = ArrayList<SmartNoteEntity>()
+            val seenNoteIds = HashSet<String>()
+            val notesArr = root.optJSONArray("notes") ?: JSONArray()
+            for (i in 0 until notesArr.length()) {
+                val n = notesArr.getJSONObject(i)
+                val id = n.optString("id", "").trim()
+                val title = n.optString("title", "").trim()
+                if (id.isEmpty() || title.isEmpty() || !seenNoteIds.add(id)) continue
+                notes.add(
+                    SmartNoteEntity(
+                        id = id,
+                        title = title,
+                        content = n.optString("content", ""),
+                        checklistJson = n.optString("checklistJson", "[]"),
+                        colorHex = n.optString("colorHex", "#10B981"),
+                        priority = n.optString("priority", "NORMAL"),
+                        labelsCsv = n.optString("labelsCsv", ""),
+                        isPinned = n.optBoolean("isPinned", false),
+                        isArchived = n.optBoolean("isArchived", false),
+                        isPinnedToNotification = n.optBoolean("isPinnedToNotification", false),
+                        reminderMillis = n.optNullableLong("reminderMillis"),
+                        repeatInterval = n.optString("repeatInterval", "NONE"),
+                        linkedTransactionType = n.optNullableString("linkedTransactionType"),
+                        linkedEntityId = n.optNullableString("linkedEntityId"),
+                        linkedEntityName = n.optNullableString("linkedEntityName"),
+                        targetBudgetPaisa = n.optLong("targetBudgetPaisa", 0L).coerceAtLeast(0L),
+                        isCompleted = n.optBoolean("isCompleted", false),
+                        updatedAt = n.optLong("updatedAt", exportedAtMillis),
+                        createdAt = n.optLong("createdAt", exportedAtMillis)
+                    )
+                )
+            }
+
             BackupValidationResult.Valid(
                 ValidatedBackupPayload(
                     schemaVersion = schemaVersion,
@@ -439,6 +505,7 @@ object BackupManager {
                     shops = shops,
                     loans = loans,
                     transactions = transactions,
+                    notes = notes,
                     duplicateIdsIgnoredInFile = duplicateTxCount
                 )
             )

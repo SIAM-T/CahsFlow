@@ -78,4 +78,48 @@ class ExampleRobolectricTest {
         val corrupted = BackupManager.validateAndParseBackup("{invalid_json")
         assertTrue(corrupted is BackupValidationResult.Invalid)
     }
+
+    @Test
+    fun `smart notes checklist serialization and real-time notification dispatch work cleanly`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        org.robolectric.Shadows.shadowOf(context as android.app.Application)
+            .grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        val items = listOf(
+            com.example.data.local.NoteChecklistItem(
+                id = "item_1",
+                text = "Pay Shop Rent",
+                isChecked = false,
+                amountPaisa = 5000_00L
+            ),
+            com.example.data.local.NoteChecklistItem(
+                id = "item_2",
+                text = "Collect from Rahman Store",
+                isChecked = true,
+                amountPaisa = 1500_00L
+            )
+        )
+        val encoded = com.example.data.local.SmartNoteEntity.serializeChecklist(items)
+        val note = com.example.data.local.SmartNoteEntity(
+            id = "note_test_1",
+            title = "Urgent Monthly Tasks",
+            content = "Complete before 5th",
+            checklistJson = encoded,
+            priority = com.example.data.local.NotePriority.URGENT.name,
+            isPinnedToNotification = true,
+            targetBudgetPaisa = 6500_00L
+        )
+        val decoded = note.checklistItems()
+        assertEquals(2, decoded.size)
+        assertEquals("Pay Shop Rent", decoded[0].text)
+        assertEquals(5000_00L, decoded[0].amountPaisa)
+        assertEquals(true, decoded[1].isChecked)
+        assertEquals(6500_00L, note.effectiveTotalPaisa())
+
+        val posted = com.example.util.NoteNotificationHelper.postRealtimeNoteNotification(
+            context = context,
+            note = note,
+            currencySymbol = "৳"
+        )
+        assertTrue(posted)
+    }
 }

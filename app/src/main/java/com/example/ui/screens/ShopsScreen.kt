@@ -3,9 +3,11 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -29,17 +32,16 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,9 +52,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.local.ShopEntity
 import com.example.data.local.TransactionEntity
@@ -60,6 +64,8 @@ import com.example.data.local.TransactionType
 import com.example.domain.ShopBalanceSummary
 import com.example.ui.components.FriendlyEmptyState
 import com.example.ui.components.GlassCard
+import com.example.ui.components.GlassIconButton
+import com.example.ui.components.glassTextFieldColors
 import com.example.ui.theme.FinanceExpense
 import com.example.ui.theme.FinanceIncome
 import com.example.ui.theme.FinanceShopDue
@@ -87,71 +93,86 @@ fun ShopsScreen(
     var showCreateOrEditShopDialog by remember { mutableStateOf(false) }
     var editingShop by remember { mutableStateOf<ShopEntity?>(null) }
 
-    if (selectedSummary != null) {
-        BackHandler {
-            onSelectShop(null)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        val isCompactScreen = maxWidth < 360.dp
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = 760.dp)
+        ) {
+            if (selectedSummary != null) {
+                BackHandler {
+                    onSelectShop(null)
+                }
+                ShopDetailView(
+                    summary = selectedSummary,
+                    isCompactScreen = isCompactScreen,
+                    onBack = { onSelectShop(null) },
+                    onAddDue = {
+                        onOpenQuickEntry(
+                            QuickEntryRequest(
+                                initialType = TransactionType.SHOP_DUE,
+                                preselectedShopId = selectedSummary.shop.id
+                            )
+                        )
+                    },
+                    onPayDue = {
+                        onOpenQuickEntry(
+                            QuickEntryRequest(
+                                initialType = TransactionType.SHOP_PAYMENT,
+                                preselectedShopId = selectedSummary.shop.id
+                            )
+                        )
+                    },
+                    onEditTransaction = { tx ->
+                        onOpenQuickEntry(
+                            QuickEntryRequest(
+                                initialType = TransactionType.fromString(tx.type),
+                                editingTransaction = tx
+                            )
+                        )
+                    },
+                    onEditShop = {
+                        editingShop = selectedSummary.shop
+                        showCreateOrEditShopDialog = true
+                    },
+                    onDeleteShop = {
+                        onDeleteShop(selectedSummary.shop.id)
+                    }
+                )
+            } else {
+                ShopListView(
+                    shopSummaries = shopSummaries,
+                    totalShopDuePaisa = totalShopDuePaisa,
+                    isCompactScreen = isCompactScreen,
+                    onSelectShop = { onSelectShop(it) },
+                    onCreateShop = {
+                        editingShop = null
+                        showCreateOrEditShopDialog = true
+                    },
+                    onQuickAddDue = { shopId ->
+                        onOpenQuickEntry(
+                            QuickEntryRequest(
+                                initialType = TransactionType.SHOP_DUE,
+                                preselectedShopId = shopId
+                            )
+                        )
+                    },
+                    onQuickPayDue = { shopId ->
+                        onOpenQuickEntry(
+                            QuickEntryRequest(
+                                initialType = TransactionType.SHOP_PAYMENT,
+                                preselectedShopId = shopId
+                            )
+                        )
+                    }
+                )
+            }
         }
-        ShopDetailView(
-            summary = selectedSummary,
-            onBack = { onSelectShop(null) },
-            onAddDue = {
-                onOpenQuickEntry(
-                    QuickEntryRequest(
-                        initialType = TransactionType.SHOP_DUE,
-                        preselectedShopId = selectedSummary.shop.id
-                    )
-                )
-            },
-            onReceivePayment = {
-                onOpenQuickEntry(
-                    QuickEntryRequest(
-                        initialType = TransactionType.SHOP_PAYMENT,
-                        preselectedShopId = selectedSummary.shop.id
-                    )
-                )
-            },
-            onEditTransaction = { tx ->
-                onOpenQuickEntry(
-                    QuickEntryRequest(
-                        initialType = TransactionType.fromString(tx.type),
-                        editingTransaction = tx
-                    )
-                )
-            },
-            onEditShop = {
-                editingShop = selectedSummary.shop
-                showCreateOrEditShopDialog = true
-            },
-            onDeleteShop = {
-                onDeleteShop(selectedSummary.shop.id)
-            }
-        )
-    } else {
-        ShopListView(
-            shopSummaries = shopSummaries,
-            totalShopDuePaisa = totalShopDuePaisa,
-            onSelectShop = { onSelectShop(it) },
-            onCreateShop = {
-                editingShop = null
-                showCreateOrEditShopDialog = true
-            },
-            onQuickAddDue = { shopId ->
-                onOpenQuickEntry(
-                    QuickEntryRequest(
-                        initialType = TransactionType.SHOP_DUE,
-                        preselectedShopId = shopId
-                    )
-                )
-            },
-            onQuickReceivePayment = { shopId ->
-                onOpenQuickEntry(
-                    QuickEntryRequest(
-                        initialType = TransactionType.SHOP_PAYMENT,
-                        preselectedShopId = shopId
-                    )
-                )
-            }
-        )
     }
 
     if (showCreateOrEditShopDialog) {
@@ -170,10 +191,11 @@ fun ShopsScreen(
 private fun ShopListView(
     shopSummaries: List<ShopBalanceSummary>,
     totalShopDuePaisa: Long,
+    isCompactScreen: Boolean,
     onSelectShop: (String) -> Unit,
     onCreateShop: () -> Unit,
     onQuickAddDue: (String) -> Unit,
-    onQuickReceivePayment: (String) -> Unit
+    onQuickPayDue: (String) -> Unit
 ) {
     val theme = LocalHisabTheme.current
     val strings = LocalHisabStrings.current
@@ -183,7 +205,7 @@ private fun ShopListView(
         modifier = Modifier
             .fillMaxSize()
             .testTag("shops_screen_list"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Header + Create Shop button
@@ -193,27 +215,30 @@ private fun ShopListView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = strings.navShops,
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isBn) "দোকানের বাকি ও আদায়ের সম্পূর্ণ হিসাব" else "Manage shop dues, products & payments",
+                        text = if (isBn) "দোকান থেকে বাকিতে পণ্য ক্রয় ও পরে টাকা পরিশোধের হিসাব" else "Take products on due now • Pay money to shop later",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Button(
                     onClick = onCreateShop,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.testTag("create_shop_button")
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (isBn) "নতুন দোকান" else "New Shop")
+                    Text(if (isBn) "নতুন দোকান" else "New Shop", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -229,9 +254,9 @@ private fun ShopListView(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isBn) "মোট দোকানের বাকি (Total Shop Due)" else "Total Shop Due (Receivable)",
+                            text = if (isBn) "দোকানে মোট বাকি (পরিশোধযোগ্য)" else "Total Shop Due (To Pay Later)",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -245,12 +270,25 @@ private fun ShopListView(
                             color = FinanceShopDue,
                             modifier = Modifier.testTag("total_shop_due_amount")
                         )
+                        Text(
+                            text = if (isBn) "বাকিতে নেওয়া পণ্যের মোট বকেয়া" else "Remaining balance for products taken on credit",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(50.dp)
                             .clip(CircleShape)
-                            .background(FinanceShopDue.copy(alpha = 0.2f)),
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        FinanceShopDue.copy(alpha = 0.35f),
+                                        FinanceShopDue.copy(alpha = 0.10f)
+                                    )
+                                )
+                            )
+                            .border(1.dp, FinanceShopDue.copy(alpha = 0.5f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -270,7 +308,7 @@ private fun ShopListView(
                 FriendlyEmptyState(
                     icon = Icons.Default.Storefront,
                     title = strings.noShopsYet,
-                    subtitle = strings.createFirstShop,
+                    subtitle = if (isBn) "দোকান তৈরি করে বাকিতে নেওয়া পণ্য ও পরিশোধের হিসাব রাখুন" else "Create a shop (e.g. Rahman Store) to record products taken on due and pay later.",
                     actionLabel = "+ ${strings.createFirstShop}",
                     actionTestTag = "empty_create_shop_button",
                     onAction = onCreateShop
@@ -280,6 +318,7 @@ private fun ShopListView(
             items(items = shopSummaries, key = { it.shop.id }) { summary ->
                 val shopColor = parseHexColor(summary.shop.colorHex, FinanceShopDue)
                 GlassCard(
+                    tintColor = shopColor,
                     onClick = { onSelectShop(summary.shop.id) },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -299,7 +338,8 @@ private fun ShopListView(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .clip(CircleShape)
-                                    .background(shopColor.copy(alpha = 0.22f)),
+                                    .background(shopColor.copy(alpha = 0.22f))
+                                    .border(1.dp, shopColor.copy(alpha = 0.45f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -309,35 +349,35 @@ private fun ShopListView(
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = summary.shop.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 val meta = listOf(summary.shop.ownerName, summary.shop.phone, summary.shop.address)
                                     .filter { it.isNotBlank() }
                                     .joinToString(" • ")
-                                if (meta.isNotEmpty()) {
-                                    Text(
-                                        text = meta,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    Text(
-                                        text = "${summary.transactionCount} transactions",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    text = meta.ifEmpty {
+                                        "Taken: ${MoneyUtils.formatPaisa(summary.totalDueTakenPaisa, theme.currencySymbol)} • Paid: ${MoneyUtils.formatPaisa(summary.totalPaidToShopPaisa, theme.currencySymbol)}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
 
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = strings.currentDue,
+                                text = if (isBn) "বর্তমান বাকি" else "Due to Pay",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -354,37 +394,84 @@ private fun ShopListView(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Fast inline buttons on each shop card
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = { onQuickAddDue(summary.shop.id) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = FinanceShopDue.copy(alpha = 0.2f),
-                                contentColor = FinanceShopDue
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("shop_quick_due_${summary.shop.name.lowercase().replace(" ", "_")}")
-                        ) {
-                            Text(strings.addDue, fontWeight = FontWeight.Bold)
+                    // Responsive Fast Action Buttons: "+ Add Due (Product)" & "Pay Due (Money)"
+                    if (isCompactScreen) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { onQuickAddDue(summary.shop.id) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = FinanceShopDue.copy(alpha = 0.25f),
+                                    contentColor = FinanceShopDue
+                                ),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("shop_quick_due_${summary.shop.name.lowercase().replace(" ", "_")}")
+                            ) {
+                                Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (isBn) "+ বাকি যোগ (পণ্য নিন)" else "+ Add Due (Get Product)", fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = { onQuickPayDue(summary.shop.id) },
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, FinanceIncome.copy(alpha = 0.6f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("shop_quick_receive_${summary.shop.name.lowercase().replace(" ", "_")}")
+                            ) {
+                                Icon(Icons.Default.Payments, contentDescription = null, tint = FinanceIncome, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isBn) "বাকি পরিশোধ (টাকা দিন)" else "Pay Due (Give Money)",
+                                    color = FinanceIncome,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
-                        OutlinedButton(
-                            onClick = { onQuickReceivePayment(summary.shop.id) },
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, FinanceIncome.copy(alpha = 0.5f)),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("shop_quick_receive_${summary.shop.name.lowercase().replace(" ", "_")}")
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                text = if (isBn) "টাকা আদায়" else "Receive Payment",
-                                color = FinanceIncome,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Button(
+                                onClick = { onQuickAddDue(summary.shop.id) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = FinanceShopDue.copy(alpha = 0.24f),
+                                    contentColor = FinanceShopDue
+                                ),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("shop_quick_due_${summary.shop.name.lowercase().replace(" ", "_")}")
+                            ) {
+                                Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isBn) "+ বাকি (পণ্য নিন)" else "+ Add Due",
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { onQuickPayDue(summary.shop.id) },
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, FinanceIncome.copy(alpha = 0.55f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("shop_quick_receive_${summary.shop.name.lowercase().replace(" ", "_")}")
+                            ) {
+                                Icon(Icons.Default.Payments, contentDescription = null, tint = FinanceIncome, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isBn) "বাকি পরিশোধ" else "Pay Due",
+                                    color = FinanceIncome,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -396,9 +483,10 @@ private fun ShopListView(
 @Composable
 private fun ShopDetailView(
     summary: ShopBalanceSummary,
+    isCompactScreen: Boolean,
     onBack: () -> Unit,
     onAddDue: () -> Unit,
-    onReceivePayment: () -> Unit,
+    onPayDue: () -> Unit,
     onEditTransaction: (TransactionEntity) -> Unit,
     onEditShop: () -> Unit,
     onDeleteShop: () -> Unit
@@ -408,7 +496,6 @@ private fun ShopDetailView(
     val isBn = theme.languageCode == "bn"
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Group transactions by formatted date (e.g. "01 Oct", "02 Oct", "03 Oct") as specified in Section 10
     val groupedByDate = remember(summary.transactions) {
         summary.transactions
             .sortedByDescending { it.timestamp }
@@ -419,7 +506,7 @@ private fun ShopDetailView(
         modifier = Modifier
             .fillMaxSize()
             .testTag("shop_detail_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. Top Bar
@@ -431,19 +518,23 @@ private fun ShopDetailView(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    IconButton(
+                    GlassIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
                         onClick = onBack,
                         modifier = Modifier.testTag("shop_detail_back_button")
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                    Column {
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = summary.shop.name,
                             style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (summary.shop.ownerName.isNotBlank() || summary.shop.phone.isNotBlank()) {
                             Text(
@@ -457,31 +548,32 @@ private fun ShopDetailView(
                     }
                 }
 
-                Row {
-                    IconButton(
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassIconButton(
+                        icon = Icons.Default.Edit,
+                        contentDescription = strings.edit,
                         onClick = onEditShop,
                         modifier = Modifier.testTag("edit_shop_button")
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = strings.edit)
-                    }
-                    IconButton(
+                    )
+                    GlassIconButton(
+                        icon = Icons.Default.Delete,
+                        contentDescription = strings.delete,
+                        tint = FinanceExpense,
                         onClick = { showDeleteConfirm = true },
                         modifier = Modifier.testTag("delete_shop_button")
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = strings.delete, tint = FinanceExpense)
-                    }
+                    )
                 }
             }
         }
 
-        // 2. Hero Due Balance & Quick Shop Entry Buttons (Section 42)
+        // 2. Hero Due Balance & Quick Shop Entry Buttons
         item(key = "shop_detail_hero") {
             GlassCard(
                 tintColor = FinanceShopDue,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = strings.currentDue,
+                    text = if (isBn) "বর্তমান বাকি (দোকানকে দিতে হবে)" else "Current Due (Money to Pay Shop)",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -503,14 +595,23 @@ private fun ShopDetailView(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Total Products Given: ${MoneyUtils.formatPaisa(summary.totalDueGivenPaisa, theme.currencySymbol)}",
+                        text = if (isBn) {
+                            "মোট বাকিতে পণ্য ক্রয়: ${MoneyUtils.formatPaisa(summary.totalDueTakenPaisa, theme.currencySymbol)}"
+                        } else {
+                            "Products Taken: ${MoneyUtils.formatPaisa(summary.totalDueTakenPaisa, theme.currencySymbol)}"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${strings.totalReceived}: ${MoneyUtils.formatPaisa(summary.totalPaymentReceivedPaisa, theme.currencySymbol)}",
+                        text = if (isBn) {
+                            "মোট পরিশোধ: ${MoneyUtils.formatPaisa(summary.totalPaidToShopPaisa, theme.currencySymbol)}"
+                        } else {
+                            "Total Paid: ${MoneyUtils.formatPaisa(summary.totalPaidToShopPaisa, theme.currencySymbol)}"
+                        },
                         style = MaterialTheme.typography.bodySmall,
-                        color = FinanceIncome
+                        color = FinanceIncome,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
@@ -525,60 +626,107 @@ private fun ShopDetailView(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Large Action Buttons: + Add Due & Receive Payment
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = onAddDue,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = FinanceShopDue,
-                            contentColor = Color(0xFF0F172A)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
-                            .testTag("shop_detail_add_due_button")
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isBn) "+ বাকি যোগ করুন" else "+ Add Due",
-                            fontWeight = FontWeight.Bold
-                        )
+                if (isCompactScreen) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = onAddDue,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = FinanceShopDue,
+                                contentColor = Color(0xFF0F172A)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("shop_detail_add_due_button")
+                        ) {
+                            Icon(Icons.Default.ShoppingBag, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isBn) "+ বাকি যোগ করুন (পণ্য নিন)" else "+ Add Due (Get Product)",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Button(
+                            onClick = onPayDue,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = FinanceIncome,
+                                contentColor = Color(0xFF042F2E)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("shop_detail_receive_payment_button")
+                        ) {
+                            Icon(Icons.Default.Payments, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isBn) "বাকি পরিশোধ করুন (টাকা দিন)" else "Pay Due (Give Money)",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-
-                    Button(
-                        onClick = onReceivePayment,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = FinanceIncome,
-                            contentColor = Color(0xFF042F2E)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
-                            .testTag("shop_detail_receive_payment_button")
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(Icons.Default.Payments, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isBn) "টাকা আদায়" else "Receive Payment",
-                            fontWeight = FontWeight.Bold
-                        )
+                        Button(
+                            onClick = onAddDue,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = FinanceShopDue,
+                                contentColor = Color(0xFF0F172A)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .testTag("shop_detail_add_due_button")
+                        ) {
+                            Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isBn) "+ বাকি (পণ্য নিন)" else "+ Add Due (Product)",
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Button(
+                            onClick = onPayDue,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = FinanceIncome,
+                                contentColor = Color(0xFF042F2E)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .testTag("shop_detail_receive_payment_button")
+                        ) {
+                            Icon(Icons.Default.Payments, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isBn) "বাকি পরিশোধ" else "Pay Due (Money)",
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // 3. Date-Grouped Shop History (Section 10)
+        // 3. Date-Grouped Shop History
         item(key = "shop_history_title") {
             Text(
                 text = if (isBn) "লেনদেনের ইতিহাস (Transactions)" else "Transactions History",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -587,7 +735,11 @@ private fun ShopDetailView(
                 FriendlyEmptyState(
                     icon = Icons.Default.Storefront,
                     title = strings.noTransactionsYet,
-                    subtitle = "Tap '+ Add Due' above to record products given to ${summary.shop.name}.",
+                    subtitle = if (isBn) {
+                        "উপরে '+ বাকি' বাটনে চাপ দিয়ে ${summary.shop.name} থেকে বাকিতে নেওয়া পণ্যের হিসাব লিখুন।"
+                    } else {
+                        "Tap '+ Add Due' above when you get products from ${summary.shop.name} to pay later."
+                    },
                     actionLabel = "+ Add Due",
                     onAction = onAddDue
                 )
@@ -617,19 +769,21 @@ private fun ShopDetailView(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "• ${tx.productOrDescription.ifBlank { if (isPayment) "Payment received" else "Products" }}",
+                                        text = "• ${tx.productOrDescription.ifBlank { if (isPayment) "Due paid to shop" else "Products on due" }}",
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Medium
                                     )
-                                    if (tx.note.isNotBlank()) {
-                                        Text(
-                                            text = tx.note,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(start = 12.dp)
-                                        )
-                                    }
+                                    Text(
+                                        text = if (isPayment) {
+                                            if (tx.note.isNotBlank()) "Paid to shop • ${tx.note}" else "Paid money to shop (Reduces due)"
+                                        } else {
+                                            if (tx.note.isNotBlank()) "Got product on due • ${tx.note}" else "Got product on due"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 12.dp)
+                                    )
                                 }
                                 Text(
                                     text = "${if (isPayment) "−" else "+"}${MoneyUtils.formatPaisa(tx.amountPaisa, theme.currencySymbol)}",
@@ -641,7 +795,7 @@ private fun ShopDetailView(
                                 )
                             }
                             if (idx < dayTxs.lastIndex) {
-                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                             }
                         }
                     }
@@ -653,6 +807,7 @@ private fun ShopDetailView(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
             title = { Text("Delete ${summary.shop.name}?") },
             text = { Text("This will remove the shop profile from your list.") },
             confirmButton = {
@@ -690,6 +845,7 @@ private fun ShopFormDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
         title = {
             Text(if (existingShop == null) "Create Shop" else "Edit Shop")
         },
@@ -699,6 +855,7 @@ private fun ShopFormDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Shop Name * (e.g. Rahman Store)") },
+                    colors = glassTextFieldColors(),
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -709,6 +866,7 @@ private fun ShopFormDialog(
                     onValueChange = { owner = it },
                     label = { Text("Owner Name (Optional)") },
                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                    colors = glassTextFieldColors(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -717,6 +875,7 @@ private fun ShopFormDialog(
                     onValueChange = { phone = it },
                     label = { Text("Phone (Optional)") },
                     leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                    colors = glassTextFieldColors(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -725,6 +884,7 @@ private fun ShopFormDialog(
                     onValueChange = { address = it },
                     label = { Text("Address (Optional)") },
                     leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                    colors = glassTextFieldColors(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -732,6 +892,7 @@ private fun ShopFormDialog(
                     value = note,
                     onValueChange = { note = it },
                     label = { Text("Note (Optional)") },
+                    colors = glassTextFieldColors(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

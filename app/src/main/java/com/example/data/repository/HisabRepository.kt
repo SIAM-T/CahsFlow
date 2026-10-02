@@ -10,8 +10,11 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.HisabDao
 import com.example.data.local.HisabDatabase
 import com.example.data.local.LoanEntity
+import com.example.data.local.NoteChecklistItem
+import com.example.data.local.NotePriority
 import com.example.data.local.PersonEntity
 import com.example.data.local.ShopEntity
+import com.example.data.local.SmartNoteEntity
 import com.example.data.local.TransactionDirection
 import com.example.data.local.TransactionEntity
 import com.example.data.local.TransactionType
@@ -30,6 +33,7 @@ class HisabRepository(
     val loansFlow: Flow<List<LoanEntity>> = dao.observeLoans()
     val settingsFlow: Flow<AppSettingsEntity?> = dao.observeSettings()
     val backupMetadataFlow: Flow<BackupMetadataEntity?> = dao.observeBackupMetadata()
+    val notesFlow: Flow<List<SmartNoteEntity>> = dao.observeSmartNotes()
 
     suspend fun ensureInitialized() {
         val currentSettings = dao.getSettingsOnce()
@@ -171,6 +175,16 @@ class HisabRepository(
         dao.deleteLoanById(loanId)
     }
 
+    // --- Smart Notes & Checklists ---
+    suspend fun saveSmartNote(note: SmartNoteEntity): SmartNoteEntity {
+        dao.insertSmartNote(note)
+        return note
+    }
+
+    suspend fun deleteSmartNote(noteId: String) {
+        dao.deleteSmartNoteById(noteId)
+    }
+
     // --- Backup & Restore ---
     suspend fun createJsonBackupFile(): Pair<File, String> {
         val now = System.currentTimeMillis()
@@ -180,6 +194,7 @@ class HisabRepository(
         val shops = dao.getAllShopsOnce()
         val loans = dao.getAllLoansOnce()
         val transactions = dao.getAllTransactionsOnce()
+        val notes = dao.getAllSmartNotesOnce()
 
         val jsonContent = BackupManager.exportToJsonString(
             settings = settings,
@@ -188,6 +203,7 @@ class HisabRepository(
             shops = shops,
             loans = loans,
             transactions = transactions,
+            notes = notes,
             nowMillis = now
         )
         val fileName = BackupManager.defaultBackupFileName(now)
@@ -227,7 +243,8 @@ class HisabRepository(
             people = payload.people,
             shops = payload.shops,
             loans = payload.loans,
-            transactions = payload.transactions
+            transactions = payload.transactions,
+            notes = payload.notes
         )
     }
 
@@ -237,7 +254,8 @@ class HisabRepository(
             people = payload.people,
             shops = payload.shops,
             loans = payload.loans,
-            transactions = payload.transactions
+            transactions = payload.transactions,
+            notes = payload.notes
         )
     }
 
@@ -489,6 +507,50 @@ class HisabRepository(
             )
         )
         dao.insertTransactions(sampleTxs)
+
+        val sampleNotes = listOf(
+            SmartNoteEntity(
+                id = "note_demo_bazar",
+                title = "Monthly Bazar & Grocery List",
+                content = "Wholesale market purchase plan — convert to Expense when done",
+                checklistJson = SmartNoteEntity.serializeChecklist(
+                    listOf(
+                        NoteChecklistItem("item_1", "Miniket Rice (25kg)", true, 1650_00L),
+                        NoteChecklistItem("item_2", "Soybean Oil (5L)", true, 850_00L),
+                        NoteChecklistItem("item_3", "Red Lentils & Spices", false, 450_00L),
+                        NoteChecklistItem("item_4", "Tea, Sugar & Milk Powder", false, 600_00L)
+                    )
+                ),
+                colorHex = "#10B981",
+                priority = NotePriority.HIGH.name,
+                labelsCsv = "Bazar,Shopping,Monthly",
+                isPinned = true,
+                linkedTransactionType = TransactionType.EXPENSE.name,
+                reminderMillis = now + 2 * hour,
+                updatedAt = now - 30 * 60_000L
+            ),
+            SmartNoteEntity(
+                id = "note_demo_shop_supply",
+                title = "Rahman Store Restock Order",
+                content = "Deliver on Thursday morning and record in Shop Due",
+                checklistJson = SmartNoteEntity.serializeChecklist(
+                    listOf(
+                        NoteChecklistItem("item_s1", "2 sacks Nazirshail Rice", false, 3200_00L),
+                        NoteChecklistItem("item_s2", "1 carton Biscuits", false, 650_00L)
+                    )
+                ),
+                colorHex = "#F59E0B",
+                priority = NotePriority.URGENT.name,
+                labelsCsv = "Shop Due,Rahman Store",
+                isPinned = true,
+                linkedTransactionType = TransactionType.SHOP_DUE.name,
+                linkedEntityId = rahmanShop.id,
+                linkedEntityName = rahmanShop.name,
+                reminderMillis = now + 4 * hour,
+                updatedAt = now - hour
+            )
+        )
+        dao.insertSmartNotes(sampleNotes)
     }
 
     suspend fun clearAllUserData() {
@@ -496,5 +558,6 @@ class HisabRepository(
         dao.deleteAllLoans()
         dao.deleteAllShops()
         dao.deleteAllPeople()
+        dao.deleteAllSmartNotes()
     }
 }

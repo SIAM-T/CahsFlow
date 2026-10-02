@@ -455,4 +455,323 @@ object FinancialEngine {
             )
         )
     }
+
+    /**
+     * Returns the signed cash delta caused by a single transaction (+ for cash inflow, - for cash outflow, 0 for credit).
+     */
+    fun cashEffectOf(tx: TransactionEntity): Long {
+        val type = TransactionType.fromString(tx.type)
+        val amt = tx.amountPaisa
+        return when (type) {
+            TransactionType.INCOME,
+            TransactionType.BORROW,
+            TransactionType.RECEIVE_PAYMENT,
+            TransactionType.SHOP_PAYMENT,
+            TransactionType.LOAN_REPAYMENT,
+            TransactionType.LOAN_RECEIVED -> amt
+
+            TransactionType.EXPENSE,
+            TransactionType.LEND,
+            TransactionType.MAKE_PAYMENT,
+            TransactionType.LOAN_GIVEN,
+            TransactionType.LOAN_PAYMENT -> -amt
+
+            TransactionType.SHOP_DUE -> 0L
+
+            TransactionType.ADJUSTMENT -> {
+                if (tx.direction == TransactionDirection.OUTFLOW.name) -amt else amt
+            }
+        }
+    }
+
+    fun isCashOutflowType(type: TransactionType, adjustmentIsOutflow: Boolean = false): Boolean =
+        when (type) {
+            TransactionType.EXPENSE,
+            TransactionType.LEND,
+            TransactionType.MAKE_PAYMENT,
+            TransactionType.LOAN_GIVEN,
+            TransactionType.LOAN_PAYMENT -> true
+            TransactionType.ADJUSTMENT -> adjustmentIsOutflow
+            else -> false
+        }
+
+    /**
+     * Computes the exact maximum allowed amount (in paisa) for a given transaction context,
+     * or null if there is no upper cap (e.g. INCOME, BORROW, SHOP_DUE).
+     */
+    fun computeMaxAllowedAmountPaisa(
+        snapshot: FinancialSnapshot,
+        existingTx: TransactionEntity?,
+        type: TransactionType,
+        shopId: String?,
+        personId: String?,
+        loanId: String?,
+        adjustmentIsOutflow: Boolean = false
+    ): Long? {
+        val effectiveCash = snapshot.cashBalancePaisa - (existingTx?.let { cashEffectOf(it) } ?: 0L)
+
+        return when (type) {
+            TransactionType.EXPENSE,
+            TransactionType.LEND,
+            TransactionType.LOAN_GIVEN -> effectiveCash.coerceAtLeast(0L)
+
+            TransactionType.ADJUSTMENT -> if (adjustmentIsOutflow) effectiveCash.coerceAtLeast(0L) else null
+
+            TransactionType.SHOP_PAYMENT -> {
+                val shopSum = snapshot.shopSummaries.find { it.shop.id == shopId } ?: return 0L
+                val oldRevert = if (existingTx != null &&
+                    existingTx.shopId == shopId &&
+                    TransactionType.fromString(existingTx.type) == TransactionType.SHOP_PAYMENT
+                ) existingTx.amountPaisa else 0L
+                (shopSum.currentDuePaisa + oldRevert).coerceAtLeast(0L)
+            }
+
+            TransactionType.RECEIVE_PAYMENT -> {
+                val personSum = snapshot.personSummaries.find { it.person.id == personId } ?: return 0L
+                val oldRevert = if (existingTx != null &&
+                    existingTx.personId == personId &&
+                    TransactionType.fromString(existingTx.type) == TransactionType.RECEIVE_PAYMENT
+                ) existingTx.amountPaisa else 0L
+                (personSum.directReceivablePaisa + oldRevert).coerceAtLeast(0L)
+            }
+
+            TransactionType.MAKE_PAYMENT -> {
+                val personSum = snapshot.personSummaries.find { it.person.id == personId } ?: return 0L
+                val oldRevert = if (existingTx != null &&
+                    existingTx.personId == personId &&
+                    TransactionType.fromString(existingTx.type) == TransactionType.MAKE_PAYMENT
+                ) existingTx.amountPaisa else 0L
+                val effectivePayable = (personSum.directPayablePaisa + oldRevert).coerceAtLeast(0L)
+                minOf(effectivePayable, effectiveCash.coerceAtLeast(0L))
+            }
+
+            TransactionType.LOAN_REPAYMENT -> {
+                val loanSum = snapshot.loanSummaries.find { it.loan.id == loanId } ?: return 0L
+                val oldRevert = if (existingTx != null &&
+                    existingTx.loanId == loanId &&
+                    TransactionType.fromString(existingTx.type) == TransactionType.LOAN_REPAYMENT
+                ) existingTx.amountPaisa else 0L
+                (loanSum.remainingPaisa + oldRevert).coerceAtLeast(0L)
+            }
+
+            TransactionType.LOAN_PAYMENT -> {
+                val loanSum = snapshot.loanSummaries.find { it.loan.id == loanId } ?: return 0L
+                val oldRevert = if (existingTx != null &&
+                    existingTx.loanId == loanId &&
+                    TransactionType.fromString(existingTx.type) == TransactionType.LOAN_PAYMENT
+                ) existingTx.amountPaisa else 0L
+                val effectiveLoanRem = (loanSum.remainingPaisa + oldRevert).coerceAtLeast(0L)
+                minOf(effectiveLoanRem, effectiveCash.coerceAtLeast(0L))
+            }
+
+            TransactionType.INCOME,
+            TransactionType.BORROW,
+            TransactionType.SHOP_DUE,
+            TransactionType.LOAN_RECEIVED -> null
+        }
+    }
+
+    /**
+     * Strict, comprehensive business-logic validator for creating or editing any transaction.
+     * Prevents:
+     * 1. Spending/giving/repaying more cash than available in Cash Balance
+     * 2. Receiving more Shop Payment than the shop's Current Due
+     * 3. Receiving more Payment from a Person than their Receivable balance
+     * 4. Paying more to a Person than their Payable balance (or available Cash)
+     * 5. Paying/receiving more on a Loan than the loan's Remaining obligation
+     * 6. Editing an inflow transaction down to an amount that would make current Cash Balance negative
+     */
+    fun validateTransactionProposal(
+        snapshot: FinancialSnapshot,
+        existingTx: TransactionEntity?,
+        type: TransactionType,
+        amountPaisa: Long,
+        shopId: String?,
+        shopName: String?,
+        personId: String?,
+        personName: String?,
+        loanId: String?,
+        currencySymbol: String = "৳",
+        adjustmentIsOutflow: Boolean = false
+    ): String? {
+        if (amountPaisa <= 0L) {
+            return "Please enter a valid amount greater than 0."
+        }
+
+        val effectiveCash = snapshot.cashBalancePaisa - (existingTx?.let { cashEffectOf(it) } ?: 0L)
+        val fmtAmt = MoneyUtils.formatPaisa(amountPaisa, currencySymbol)
+        val fmtCash = MoneyUtils.formatPaisa(effectiveCash.coerceAtLeast(0L), currencySymbol)
+
+        // 1. CheckShop Payment constraints
+        if (type == TransactionType.SHOP_PAYMENT) {
+            val shopSum = snapshot.shopSummaries.find { it.shop.id == shopId }
+                ?: return "Cannot receive payment from a new shop with 0 due. Record a Shop Due first."
+            val oldRevert = if (existingTx != null &&
+                existingTx.shopId == shopId &&
+                TransactionType.fromString(existingTx.type) == TransactionType.SHOP_PAYMENT
+            ) existingTx.amountPaisa else 0L
+            val effectiveDue = (shopSum.currentDuePaisa + oldRevert).coerceAtLeast(0L)
+            if (effectiveDue <= 0L) {
+                return "${shopSum.shop.name} currently has ${MoneyUtils.formatPaisa(0L, currencySymbol)} due. You cannot receive a payment when there is no due."
+            }
+            if (amountPaisa > effectiveDue) {
+                return "Overpayment blocked! ${shopSum.shop.name} only owes ${MoneyUtils.formatPaisa(effectiveDue, currencySymbol)}, so you cannot receive $fmtAmt."
+            }
+        }
+
+        // 2. Check Person Receive Payment constraints
+        if (type == TransactionType.RECEIVE_PAYMENT) {
+            val personSum = snapshot.personSummaries.find { it.person.id == personId }
+                ?: return "${personName ?: "This person"} does not owe you any money yet. Use 'Take Money (Borrow)' if you are borrowing from them."
+            val oldRevert = if (existingTx != null &&
+                existingTx.personId == personId &&
+                TransactionType.fromString(existingTx.type) == TransactionType.RECEIVE_PAYMENT
+            ) existingTx.amountPaisa else 0L
+            val effectiveRec = (personSum.directReceivablePaisa + oldRevert).coerceAtLeast(0L)
+            if (effectiveRec <= 0L) {
+                return "${personSum.person.name} owes you ${MoneyUtils.formatPaisa(0L, currencySymbol)} right now. Use 'Take Money (Borrow)' if you are borrowing from them."
+            }
+            if (amountPaisa > effectiveRec) {
+                return "Exceeds Receivable! ${personSum.person.name} only owes you ${MoneyUtils.formatPaisa(effectiveRec, currencySymbol)}, so you cannot receive $fmtAmt."
+            }
+        }
+
+        // 3. Check Person Make Payment (Repay Debt) constraints
+        if (type == TransactionType.MAKE_PAYMENT) {
+            val personSum = snapshot.personSummaries.find { it.person.id == personId }
+                ?: return "You do not owe ${personName ?: "this person"} any money yet. Use 'Give Money (Lend)' if you are lending to them."
+            val oldRevert = if (existingTx != null &&
+                existingTx.personId == personId &&
+                TransactionType.fromString(existingTx.type) == TransactionType.MAKE_PAYMENT
+            ) existingTx.amountPaisa else 0L
+            val effectivePayable = (personSum.directPayablePaisa + oldRevert).coerceAtLeast(0L)
+            if (effectivePayable <= 0L) {
+                return "You do not owe ${personSum.person.name} any money (${MoneyUtils.formatPaisa(0L, currencySymbol)} payable). Use 'Give Money (Lend)' if you are lending to them."
+            }
+            if (amountPaisa > effectivePayable) {
+                return "Overpayment blocked! You only owe ${personSum.person.name} ${MoneyUtils.formatPaisa(effectivePayable, currencySymbol)}, so you cannot repay $fmtAmt."
+            }
+            if (amountPaisa > effectiveCash) {
+                return "Insufficient Cash Balance! You have $fmtCash available, so you cannot repay $fmtAmt."
+            }
+        }
+
+        // 4. Check Loan Repayment / Installment constraints
+        if (type == TransactionType.LOAN_REPAYMENT || type == TransactionType.LOAN_PAYMENT) {
+            val loanSum = snapshot.loanSummaries.find { it.loan.id == loanId }
+                ?: return "Please select an active loan to record a repayment."
+            val oldRevert = if (existingTx != null &&
+                existingTx.loanId == loanId &&
+                (TransactionType.fromString(existingTx.type) == TransactionType.LOAN_REPAYMENT ||
+                    TransactionType.fromString(existingTx.type) == TransactionType.LOAN_PAYMENT)
+            ) existingTx.amountPaisa else 0L
+            val effectiveLoanRem = (loanSum.remainingPaisa + oldRevert).coerceAtLeast(0L)
+            if (effectiveLoanRem <= 0L) {
+                return "This loan with ${loanSum.loan.personName} is already fully settled!"
+            }
+            if (amountPaisa > effectiveLoanRem) {
+                return "Exceeds Remaining Loan! Only ${MoneyUtils.formatPaisa(effectiveLoanRem, currencySymbol)} remains on this loan, so you cannot record $fmtAmt."
+            }
+            if (type == TransactionType.LOAN_PAYMENT && amountPaisa > effectiveCash) {
+                return "Insufficient Cash Balance! You only have $fmtCash available to pay this loan installment of $fmtAmt."
+            }
+        }
+
+        // 5. General Cash Outflow Guard (EXPENSE, LEND, LOAN_GIVEN, ADJUSTMENT OUTFLOW)
+        if (isCashOutflowType(type, adjustmentIsOutflow)) {
+            if (amountPaisa > effectiveCash) {
+                val actionDesc = when (type) {
+                    TransactionType.EXPENSE -> "spend"
+                    TransactionType.LEND -> "give"
+                    TransactionType.LOAN_GIVEN -> "lend"
+                    TransactionType.MAKE_PAYMENT, TransactionType.LOAN_PAYMENT -> "pay"
+                    else -> "deduct"
+                }
+                return "Insufficient Cash Balance! You only have $fmtCash available, so you cannot $actionDesc $fmtAmt."
+            }
+        }
+
+        // 6. Check if editing an inflow transaction down would cause current Cash Balance to go negative
+        val proposedNewTx = TransactionEntity(
+            id = existingTx?.id ?: "temp",
+            type = type.name,
+            direction = if (type == TransactionType.ADJUSTMENT && adjustmentIsOutflow) {
+                TransactionDirection.OUTFLOW.name
+            } else {
+                type.defaultDirection.name
+            },
+            amountPaisa = amountPaisa,
+            timestamp = System.currentTimeMillis()
+        )
+        val projectedCash = effectiveCash + cashEffectOf(proposedNewTx)
+        if (projectedCash < 0L) {
+            return "Cannot save this change because your Cash Balance would become negative (${MoneyUtils.formatPaisa(projectedCash, currencySymbol)})."
+        }
+
+        return null
+    }
+
+    /**
+     * Validates creating a new formal Loan.
+     * If `isLentByMe == true`, ensures `principalPaisa <= snapshot.cashBalancePaisa`.
+     */
+    fun validateLoanCreation(
+        snapshot: FinancialSnapshot,
+        isLentByMe: Boolean,
+        principalPaisa: Long,
+        personName: String,
+        currencySymbol: String = "৳"
+    ): String? {
+        if (personName.isBlank()) {
+            return "Please enter or select a person's name for this loan."
+        }
+        if (principalPaisa <= 0L) {
+            return "Please enter a loan amount greater than 0."
+        }
+        if (isLentByMe && principalPaisa > snapshot.cashBalancePaisa) {
+            val fmtPrin = MoneyUtils.formatPaisa(principalPaisa, currencySymbol)
+            val fmtCash = MoneyUtils.formatPaisa(snapshot.cashBalancePaisa.coerceAtLeast(0L), currencySymbol)
+            return "Insufficient Cash Balance! You only have $fmtCash available, so you cannot lend $fmtPrin."
+        }
+        return null
+    }
+
+    /**
+     * Validates deleting a transaction so deletion never leaves negative Cash, negative Shop Due,
+     * or orphaned repayments exceeding principal.
+     */
+    fun validateTransactionDeletion(
+        snapshot: FinancialSnapshot,
+        txToDelete: TransactionEntity,
+        currencySymbol: String = "৳"
+    ): String? {
+        val projectedCash = snapshot.cashBalancePaisa - cashEffectOf(txToDelete)
+        if (projectedCash < 0L) {
+            return "Cannot delete this inflow of ${MoneyUtils.formatPaisa(txToDelete.amountPaisa, currencySymbol)} because that cash has already been spent or lent out (Cash Balance would drop to ${MoneyUtils.formatPaisa(projectedCash, currencySymbol)})."
+        }
+
+        val type = TransactionType.fromString(txToDelete.type)
+        if (type == TransactionType.SHOP_DUE && txToDelete.shopId != null) {
+            val shopSum = snapshot.shopSummaries.find { it.shop.id == txToDelete.shopId }
+            if (shopSum != null && (shopSum.totalDueGivenPaisa - txToDelete.amountPaisa) < shopSum.totalPaymentReceivedPaisa) {
+                return "Cannot delete this Shop Due because payments have already been received against it from ${shopSum.shop.name}."
+            }
+        }
+
+        if (type == TransactionType.LEND && txToDelete.personId != null) {
+            val personSum = snapshot.personSummaries.find { it.person.id == txToDelete.personId }
+            if (personSum != null && (personSum.lentPaisa - txToDelete.amountPaisa) < personSum.receivedPaymentPaisa) {
+                return "Cannot delete this Lending entry because repayments have already been received against it from ${personSum.person.name}."
+            }
+        }
+
+        if (type == TransactionType.BORROW && txToDelete.personId != null) {
+            val personSum = snapshot.personSummaries.find { it.person.id == txToDelete.personId }
+            if (personSum != null && (personSum.borrowedPaisa - txToDelete.amountPaisa) < personSum.madePaymentPaisa) {
+                return "Cannot delete this Borrowing entry because repayments have already been paid against it to ${personSum.person.name}."
+            }
+        }
+
+        return null
+    }
 }

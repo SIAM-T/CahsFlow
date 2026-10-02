@@ -195,7 +195,8 @@ fun HomeScreen(
 
                 "QUICK_ACTIONS" -> QuickActionsDashboardCard(
                     onOpenQuickEntry = onOpenQuickEntry,
-                    onOpenLoanCreator = onOpenLoanCreator
+                    onOpenLoanCreator = onOpenLoanCreator,
+                    onOpenNotes = { onSelectTab(MainNavTab.NOTES) }
                 )
 
                 "TODAY_SUMMARY" -> TodaySummaryCard(
@@ -614,9 +615,11 @@ private fun GlassMetricPill(
 @Composable
 private fun QuickActionsDashboardCard(
     onOpenQuickEntry: (QuickEntryRequest) -> Unit,
-    onOpenLoanCreator: () -> Unit
+    onOpenLoanCreator: () -> Unit,
+    onOpenNotes: () -> Unit = {}
 ) {
     val strings = LocalHisabStrings.current
+    val theme = LocalHisabTheme.current
 
     GlassCard(
         modifier = Modifier
@@ -719,6 +722,15 @@ private fun QuickActionsDashboardCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            QuickActionGlassButton(
+                label = if (theme.languageCode == "bn") "📌 স্মার্ট নোট, চেকলিস্ট ও রিয়েল-টাইম রিমাইন্ডার" else "📌 Smart Notes, To-Do & Live Reminders",
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                color = Color(0xFF06B6D4),
+                testTag = "quick_action_notes",
+                onClick = onOpenNotes,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

@@ -72,6 +72,7 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.LoanStatus
 import com.example.data.local.PersonEntity
 import com.example.data.local.TransactionType
+import com.example.domain.FinancialEngine
 import com.example.domain.FinancialSnapshot
 import com.example.domain.LoanSummary
 import com.example.ui.components.FriendlyEmptyState
@@ -94,6 +95,7 @@ import com.example.util.MoneyUtils
 @Composable
 fun MoreHubScreen(
     snapshot: FinancialSnapshot,
+    activeNotesCount: Int = 0,
     onSelectSubScreen: (MoreSubScreen) -> Unit
 ) {
     val theme = LocalHisabTheme.current
@@ -111,6 +113,15 @@ fun MoreHubScreen(
     )
 
     val items = listOf(
+        MoreMenuItem(
+            MoreSubScreen.NOTES,
+            if (isBn) "স্মার্ট নোট, চেকলিস্ট ও রিমাইন্ডার" else "Smart Notes, To-Do & Reminders",
+            if (isBn) "বাজেট চেকলিস্ট, স্ট্যাটাস বার পিন ও রিয়েল-টাইম অ্যালার্ট" else "Financial checklists, status-bar pin & real-time alerts",
+            Icons.Default.Edit,
+            Color(0xFF06B6D4),
+            "$activeNotesCount Notes",
+            "more_item_notes"
+        ),
         MoreMenuItem(
             MoreSubScreen.LOANS,
             strings.loansSection,
@@ -268,6 +279,7 @@ fun LoansSubScreen(
     people: List<PersonEntity>,
     totalLoansGivenRemainingPaisa: Long,
     totalLoansTakenRemainingPaisa: Long,
+    availableCashPaisa: Long = Long.MAX_VALUE,
     showCreateDialogInitially: Boolean = false,
     onBack: () -> Unit,
     onCreateLoan: (Boolean, String?, String, Long, Long, String, Int, Long, Long?, String) -> Unit,
@@ -552,6 +564,7 @@ fun LoansSubScreen(
         CreateLoanDialog(
             people = people,
             currencySymbol = theme.currencySymbol,
+            availableCashPaisa = availableCashPaisa,
             onDismiss = { showCreateDialog = false },
             onCreate = { isLent, pId, pName, principal, interest, rateStr, installments, dueMillis, note ->
                 onCreateLoan(
@@ -577,6 +590,7 @@ fun LoansSubScreen(
 fun CreateLoanDialog(
     people: List<PersonEntity>,
     currencySymbol: String,
+    availableCashPaisa: Long = Long.MAX_VALUE,
     onDismiss: () -> Unit,
     onCreate: (Boolean, String?, String, Long, Long, String, Int, Long?, String) -> Unit
 ) {
@@ -588,6 +602,11 @@ fun CreateLoanDialog(
     var installmentsInput by remember { mutableStateOf("1") }
     var dueDays by remember { mutableStateOf<Int?>(30) }
     var note by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    val parsedPrincipal = MoneyUtils.parseToPaisa(principalInput) ?: 0L
+    val safeCash = availableCashPaisa.coerceAtLeast(0L)
+    val exceedsCash = isLentByMe && availableCashPaisa != Long.MAX_VALUE && parsedPrincipal > safeCash
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -597,16 +616,63 @@ fun CreateLoanDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = !isLentByMe,
-                        onClick = { isLentByMe = false },
+                        onClick = {
+                            isLentByMe = false
+                            errorText = null
+                        },
                         label = { Text("I Borrowed") },
                         modifier = Modifier.testTag("loan_type_borrowed")
                     )
                     FilterChip(
                         selected = isLentByMe,
-                        onClick = { isLentByMe = true },
+                        onClick = {
+                            isLentByMe = true
+                            errorText = null
+                        },
                         label = { Text("I Lent") },
                         modifier = Modifier.testTag("loan_type_lent")
                     )
+                }
+
+                if (isLentByMe && availableCashPaisa != Long.MAX_VALUE) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = (if (exceedsCash) FinanceExpense else FinanceIncome).copy(alpha = 0.14f),
+                        border = BorderStroke(1.dp, (if (exceedsCash) FinanceExpense else FinanceIncome).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Available Cash to Lend",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = MoneyUtils.formatPaisa(safeCash, currencySymbol),
+                                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                                    color = if (exceedsCash) FinanceExpense else FinanceIncome,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (safeCash > 0L) {
+                                TextButton(
+                                    onClick = {
+                                        principalInput = MoneyUtils.paisaToEditableString(safeCash)
+                                        errorText = null
+                                    }
+                                ) {
+                                    Text("Max")
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (people.isNotEmpty()) {
@@ -617,6 +683,7 @@ fun CreateLoanDialog(
                                 onClick = {
                                     selectedPersonId = p.id
                                     personName = p.name
+                                    errorText = null
                                 },
                                 label = { Text(p.name) }
                             )
@@ -629,6 +696,7 @@ fun CreateLoanDialog(
                     onValueChange = {
                         personName = it
                         selectedPersonId = null
+                        errorText = null
                     },
                     label = { Text("Person Name * (e.g. Karim / Rahim)") },
                     singleLine = true,
@@ -639,7 +707,10 @@ fun CreateLoanDialog(
 
                 OutlinedTextField(
                     value = principalInput,
-                    onValueChange = { principalInput = it },
+                    onValueChange = {
+                        principalInput = it
+                        errorText = null
+                    },
                     label = { Text("Loan Amount ($currencySymbol) *") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -674,6 +745,20 @@ fun CreateLoanDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                val shownErr = errorText ?: if (exceedsCash) {
+                    "Insufficient Cash Balance! You only have ${MoneyUtils.formatPaisa(safeCash, currencySymbol)} available, so you cannot lend ${MoneyUtils.formatPaisa(parsedPrincipal, currencySymbol)}."
+                } else null
+
+                if (shownErr != null) {
+                    Text(
+                        text = shownErr,
+                        color = FinanceExpense,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.testTag("dialog_loan_error_text")
+                    )
+                }
             }
         },
         confirmButton = {
@@ -683,19 +768,29 @@ fun CreateLoanDialog(
                     val interestPaisa = MoneyUtils.parseToPaisa(interestInput) ?: 0L
                     val inst = installmentsInput.toIntOrNull()?.coerceAtLeast(1) ?: 1
                     val dueMillis = dueDays?.let { System.currentTimeMillis() + it * 24L * 3600_000L }
-                    if (principalPaisa > 0L && personName.isNotBlank()) {
-                        onCreate(
-                            isLentByMe,
-                            selectedPersonId,
-                            personName.trim(),
-                            principalPaisa,
-                            interestPaisa,
-                            "",
-                            inst,
-                            dueMillis,
-                            note
-                        )
+                    if (personName.isBlank()) {
+                        errorText = "Please enter a person's name."
+                        return@Button
                     }
+                    if (principalPaisa <= 0L) {
+                        errorText = "Please enter a loan amount greater than 0."
+                        return@Button
+                    }
+                    if (isLentByMe && availableCashPaisa != Long.MAX_VALUE && principalPaisa > safeCash) {
+                        errorText = "Insufficient Cash Balance! You only have ${MoneyUtils.formatPaisa(safeCash, currencySymbol)} available, so you cannot lend ${MoneyUtils.formatPaisa(principalPaisa, currencySymbol)}."
+                        return@Button
+                    }
+                    onCreate(
+                        isLentByMe,
+                        selectedPersonId,
+                        personName.trim(),
+                        principalPaisa,
+                        interestPaisa,
+                        "",
+                        inst,
+                        dueMillis,
+                        note
+                    )
                 },
                 modifier = Modifier.testTag("dialog_save_loan_button")
             ) {

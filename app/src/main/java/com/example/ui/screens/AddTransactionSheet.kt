@@ -67,6 +67,7 @@ import com.example.data.local.LoanEntity
 import com.example.data.local.PersonEntity
 import com.example.data.local.ShopEntity
 import com.example.data.local.TransactionType
+import com.example.domain.FinancialEngine
 import com.example.domain.FinancialSnapshot
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassChip
@@ -308,7 +309,9 @@ fun QuickEntryBottomSheet(
 
     var amountText by remember(request) {
         mutableStateOf(
-            editingTx?.let { MoneyUtils.paisaToEditableString(it.amountPaisa) } ?: ""
+            editingTx?.let { MoneyUtils.paisaToEditableString(it.amountPaisa) }
+                ?: request.initialAmountPaisa?.let { MoneyUtils.paisaToEditableString(it) }
+                ?: ""
         )
     }
 
@@ -355,11 +358,11 @@ fun QuickEntryBottomSheet(
     }
 
     var productOrDescription by remember(request) {
-        mutableStateOf(editingTx?.productOrDescription ?: "")
+        mutableStateOf(editingTx?.productOrDescription ?: request.initialDescription ?: "")
     }
 
     var noteText by remember(request) {
-        mutableStateOf(editingTx?.note ?: "")
+        mutableStateOf(editingTx?.note ?: request.initialNote ?: "")
     }
 
     var dueDaysOffset by remember(request) {
@@ -756,6 +759,174 @@ fun QuickEntryBottomSheet(
                 }
             }
 
+            // 3B. Context Selector: LOAN (for Loan Repayment / Installment)
+            if (selectedType == TransactionType.LOAN_REPAYMENT || selectedType == TransactionType.LOAN_PAYMENT) {
+                val matchingLoans = snapshot.loanSummaries.filter {
+                    val wantLent = selectedType == TransactionType.LOAN_REPAYMENT
+                    it.loan.isLentByMe == wantLent
+                }
+                val activeLoanSum = snapshot.loanSummaries.find { it.loan.id == selectedLoanId }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (isBn) "ঋণ নির্বাচন করুন" else "Select Active Loan",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (matchingLoans.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            for (ls in matchingLoans) {
+                                GlassChip(
+                                    selected = ls.loan.id == selectedLoanId,
+                                    label = "${ls.loan.personName} (${MoneyUtils.formatPaisa(ls.remainingPaisa, theme.currencySymbol)})",
+                                    accentColor = FinanceLoan,
+                                    onClick = {
+                                        selectedLoanId = ls.loan.id
+                                        selectedPersonId = ls.loan.personId
+                                        customPersonName = ls.loan.personName
+                                        validationError = null
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    if (activeLoanSum != null) {
+                        val remBefore = activeLoanSum.remainingPaisa
+                        val remAfter = (remBefore - parsedAmountPaisa).coerceAtLeast(0L)
+                        GlassCard(
+                            tintColor = FinanceLoan,
+                            contentPadding = PaddingValues(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Loan Remaining (${activeLoanSum.loan.personName})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = MoneyUtils.formatPaisa(remBefore, theme.currencySymbol),
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "After Repayment",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = MoneyUtils.formatPaisa(remAfter, theme.currencySymbol),
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
+                                        color = FinanceIncome,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Live Cash Balance & Strict Limit Guardrail Card
+            val effectiveShopIdForCheck = if (isCreatingNewShopInline) null else selectedShop?.id
+            val effectivePersonIdForCheck = if (isCreatingNewPersonInline) null else selectedPerson?.id
+            val maxAllowedPaisa = FinancialEngine.computeMaxAllowedAmountPaisa(
+                snapshot = snapshot,
+                existingTx = editingTx,
+                type = selectedType,
+                shopId = effectiveShopIdForCheck,
+                personId = effectivePersonIdForCheck,
+                loanId = selectedLoanId
+            )
+            val effectiveCashAvailable = (snapshot.cashBalancePaisa - (editingTx?.let { FinancialEngine.cashEffectOf(it) } ?: 0L)).coerceAtLeast(0L)
+            val isCashOutflow = FinancialEngine.isCashOutflowType(selectedType)
+            val liveProposalError = if (parsedAmountPaisa > 0L) {
+                FinancialEngine.validateTransactionProposal(
+                    snapshot = snapshot,
+                    existingTx = editingTx,
+                    type = selectedType,
+                    amountPaisa = parsedAmountPaisa,
+                    shopId = effectiveShopIdForCheck,
+                    shopName = if (isCreatingNewShopInline || selectedShop == null) customShopName.trim() else selectedShop.name,
+                    personId = effectivePersonIdForCheck,
+                    personName = if (isCreatingNewPersonInline || selectedPerson == null) customPersonName.trim() else selectedPerson.name,
+                    loanId = selectedLoanId,
+                    currencySymbol = theme.currencySymbol
+                )
+            } else null
+
+            if (isCashOutflow || maxAllowedPaisa != null) {
+                val isExceeded = liveProposalError != null
+                val guardTint = if (isExceeded) FinanceExpense else theme.accentColor
+                GlassCard(
+                    tintColor = guardTint,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("balance_guardrail_card")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = when {
+                                    isCashOutflow && maxAllowedPaisa != null && maxAllowedPaisa < effectiveCashAvailable ->
+                                        "Available Cash: ${MoneyUtils.formatPaisa(effectiveCashAvailable, theme.currencySymbol)} • Max Payable: ${MoneyUtils.formatPaisa(maxAllowedPaisa, theme.currencySymbol)}"
+                                    isCashOutflow ->
+                                        if (isBn) "ব্যবহারযোগ্য নগদ ব্যালেন্স (Available Cash)" else "Available Cash Balance"
+                                    selectedType == TransactionType.SHOP_PAYMENT ->
+                                        "Max Collectible Shop Due"
+                                    selectedType == TransactionType.RECEIVE_PAYMENT ->
+                                        "Max Collectible Receivable"
+                                    else -> "Maximum Allowed Amount"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val shownCap = maxAllowedPaisa ?: effectiveCashAvailable
+                            Text(
+                                text = MoneyUtils.formatPaisa(shownCap, theme.currencySymbol),
+                                style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
+                                color = if (isExceeded) FinanceExpense else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.testTag("available_limit_value")
+                            )
+                            if (isCashOutflow && parsedAmountPaisa > 0L && !isExceeded) {
+                                val remainingCashAfter = (effectiveCashAvailable - parsedAmountPaisa).coerceAtLeast(0L)
+                                Text(
+                                    text = "Cash after transaction: ${MoneyUtils.formatPaisa(remainingCashAfter, theme.currencySymbol)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (maxAllowedPaisa != null && maxAllowedPaisa > 0L) {
+                            GlassChip(
+                                selected = parsedAmountPaisa == maxAllowedPaisa,
+                                label = "Max (${MoneyUtils.formatPaisa(maxAllowedPaisa, theme.currencySymbol)})",
+                                accentColor = guardTint,
+                                onClick = {
+                                    amountText = MoneyUtils.paisaToEditableString(maxAllowedPaisa)
+                                    validationError = null
+                                },
+                                modifier = Modifier.testTag("fill_max_allowed_chip")
+                            )
+                        }
+                    }
+                }
+            }
+
             // 4. Amount Input + Fast Amount Glass Chips
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -887,12 +1058,22 @@ fun QuickEntryBottomSheet(
                 }
             }
 
-            if (validationError != null) {
-                Text(
-                    text = validationError!!,
-                    color = FinanceExpense,
-                    style = MaterialTheme.typography.bodySmall
-                )
+            val activeErrorText = validationError ?: liveProposalError
+            if (activeErrorText != null) {
+                GlassCard(
+                    tintColor = FinanceExpense,
+                    contentPadding = PaddingValues(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("transaction_validation_error_banner")
+                ) {
+                    Text(
+                        text = activeErrorText,
+                        color = FinanceExpense,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
             // Save Button
@@ -904,24 +1085,58 @@ fun QuickEntryBottomSheet(
                         return@Button
                     }
 
-                    if (selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) {
-                        val sName = if (isCreatingNewShopInline || selectedShop == null) customShopName.trim() else selectedShop.name
-                        if (sName.isEmpty()) {
-                            validationError = "Please select or enter a shop name."
-                            return@Button
-                        }
+                    val resolvedSId = if (selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) {
+                        if (isCreatingNewShopInline) null else selectedShop?.id
+                    } else null
+                    val resolvedSName = if (selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) {
+                        if (isCreatingNewShopInline || selectedShop == null) customShopName.trim() else selectedShop.name
+                    } else null
+
+                    if ((selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) &&
+                        resolvedSName.isNullOrEmpty()
+                    ) {
+                        validationError = "Please select or enter a shop name."
+                        return@Button
                     }
 
-                    if (selectedType == TransactionType.LEND ||
-                        selectedType == TransactionType.BORROW ||
-                        selectedType == TransactionType.RECEIVE_PAYMENT ||
-                        selectedType == TransactionType.MAKE_PAYMENT
-                    ) {
-                        val pName = if (isCreatingNewPersonInline || selectedPerson == null) customPersonName.trim() else selectedPerson.name
-                        if (pName.isEmpty()) {
-                            validationError = "Please select or enter a person's name."
-                            return@Button
-                        }
+                    val isPersonType = selectedType in listOf(
+                        TransactionType.LEND,
+                        TransactionType.BORROW,
+                        TransactionType.RECEIVE_PAYMENT,
+                        TransactionType.MAKE_PAYMENT
+                    )
+                    val resolvedPId = if (isPersonType) {
+                        if (isCreatingNewPersonInline) null else selectedPerson?.id
+                    } else null
+                    val resolvedPName = if (isPersonType) {
+                        if (isCreatingNewPersonInline || selectedPerson == null) customPersonName.trim() else selectedPerson.name
+                    } else null
+
+                    if (isPersonType && resolvedPName.isNullOrEmpty()) {
+                        validationError = "Please select or enter a person's name."
+                        return@Button
+                    }
+
+                    val resolvedLId = selectedLoanId.takeIf {
+                        selectedType == TransactionType.LOAN_REPAYMENT || selectedType == TransactionType.LOAN_PAYMENT
+                    }
+
+                    // Strict Business Logic Validation before saving!
+                    val proposalErr = FinancialEngine.validateTransactionProposal(
+                        snapshot = snapshot,
+                        existingTx = editingTx,
+                        type = selectedType,
+                        amountPaisa = paisa,
+                        shopId = resolvedSId,
+                        shopName = resolvedSName,
+                        personId = resolvedPId,
+                        personName = resolvedPName,
+                        loanId = resolvedLId,
+                        currencySymbol = theme.currencySymbol
+                    )
+                    if (proposalErr != null) {
+                        validationError = proposalErr
+                        return@Button
                     }
 
                     val now = editingTx?.timestamp ?: System.currentTimeMillis()
@@ -935,33 +1150,11 @@ fun QuickEntryBottomSheet(
                         now,
                         if (selectedType == TransactionType.INCOME || selectedType == TransactionType.EXPENSE) selectedCategory?.id else null,
                         if (selectedType == TransactionType.INCOME || selectedType == TransactionType.EXPENSE) selectedCategory?.name else null,
-                        if (selectedType in listOf(
-                                TransactionType.LEND,
-                                TransactionType.BORROW,
-                                TransactionType.RECEIVE_PAYMENT,
-                                TransactionType.MAKE_PAYMENT
-                            )
-                        ) {
-                            if (isCreatingNewPersonInline) null else selectedPerson?.id
-                        } else null,
-                        if (selectedType in listOf(
-                                TransactionType.LEND,
-                                TransactionType.BORROW,
-                                TransactionType.RECEIVE_PAYMENT,
-                                TransactionType.MAKE_PAYMENT
-                            )
-                        ) {
-                            if (isCreatingNewPersonInline || selectedPerson == null) customPersonName.trim() else selectedPerson.name
-                        } else null,
-                        if (selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) {
-                            if (isCreatingNewShopInline) null else selectedShop?.id
-                        } else null,
-                        if (selectedType == TransactionType.SHOP_DUE || selectedType == TransactionType.SHOP_PAYMENT) {
-                            if (isCreatingNewShopInline || selectedShop == null) customShopName.trim() else selectedShop.name
-                        } else null,
-                        selectedLoanId.takeIf {
-                            selectedType == TransactionType.LOAN_REPAYMENT || selectedType == TransactionType.LOAN_PAYMENT
-                        },
+                        resolvedPId,
+                        resolvedPName,
+                        resolvedSId,
+                        resolvedSName,
+                        resolvedLId,
                         productOrDescription,
                         noteText,
                         dueMillis

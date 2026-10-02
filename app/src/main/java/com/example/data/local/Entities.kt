@@ -232,3 +232,101 @@ data class BackupMetadataEntity(
     val lastBackupTransactionCount: Int = 0,
     val lastBackupSizeBytes: Long = 0L
 )
+
+enum class NotePriority(val labelEn: String, val labelBn: String, val colorHex: String) {
+    URGENT("Urgent 🔥", "জরুরি 🔥", "#F43F5E"),
+    HIGH("High ⚡", "উচ্চ ⚡", "#F59E0B"),
+    NORMAL("Normal", "সাধারণ", "#10B981"),
+    LOW("Low", "নিম্ন", "#06B6D4")
+}
+
+data class NoteChecklistItem(
+    val id: String,
+    val text: String,
+    val isChecked: Boolean = false,
+    val amountPaisa: Long = 0L
+)
+
+@Entity(
+    tableName = "smart_notes",
+    indices = [
+        Index(value = ["isPinned", "updatedAt"]),
+        Index(value = ["isArchived"]),
+        Index(value = ["reminderMillis"])
+    ]
+)
+data class SmartNoteEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val content: String = "",
+    val checklistJson: String = "[]", // JSON array of NoteChecklistItem
+    val colorHex: String = "#10B981",
+    val priority: String = NotePriority.NORMAL.name,
+    val labelsCsv: String = "",
+    val isPinned: Boolean = false,
+    val isArchived: Boolean = false,
+    val isPinnedToNotification: Boolean = false,
+    val reminderMillis: Long? = null,
+    val repeatInterval: String = "NONE", // NONE, DAILY, WEEKLY, MONTHLY
+    val linkedTransactionType: String? = null, // EXPENSE, INCOME, SHOP_DUE, LEND, etc.
+    val linkedEntityId: String? = null,
+    val linkedEntityName: String? = null,
+    val targetBudgetPaisa: Long = 0L,
+    val isCompleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = System.currentTimeMillis()
+) {
+    fun labelsList(): List<String> =
+        labelsCsv.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    fun checklistItems(): List<NoteChecklistItem> {
+        if (checklistJson.isBlank() || checklistJson == "[]") return emptyList()
+        return try {
+            val arr = org.json.JSONArray(checklistJson)
+            val list = ArrayList<NoteChecklistItem>(arr.length())
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    NoteChecklistItem(
+                        id = obj.optString("id", "item_$i"),
+                        text = obj.optString("text", ""),
+                        isChecked = obj.optBoolean("isChecked", false),
+                        amountPaisa = obj.optLong("amountPaisa", 0L).coerceAtLeast(0L)
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun checklistTotalPaisa(): Long =
+        checklistItems().sumOf { it.amountPaisa }
+
+    fun checklistCheckedPaisa(): Long =
+        checklistItems().filter { it.isChecked }.sumOf { it.amountPaisa }
+
+    fun effectiveTotalPaisa(): Long {
+        val fromChecklist = checklistTotalPaisa()
+        return if (fromChecklist > 0L) fromChecklist else targetBudgetPaisa
+    }
+
+    companion object {
+        fun serializeChecklist(items: List<NoteChecklistItem>): String {
+            val arr = org.json.JSONArray()
+            for (item in items) {
+                if (item.text.isBlank()) continue
+                arr.put(
+                    org.json.JSONObject().apply {
+                        put("id", item.id)
+                        put("text", item.text.trim())
+                        put("isChecked", item.isChecked)
+                        put("amountPaisa", item.amountPaisa.coerceAtLeast(0L))
+                    }
+                )
+            }
+            return arr.toString()
+        }
+    }
+}
