@@ -19,7 +19,10 @@ data class ShopBalanceSummary(
     val totalPaymentReceivedPaisa: Long,
     val currentDuePaisa: Long,
     val transactionCount: Int,
-    val transactions: List<TransactionEntity>
+    val transactions: List<TransactionEntity>,
+    val totalDueTakenPaisa: Long = 0L,
+    val totalPaidToShopPaisa: Long = 0L,
+    val netDuePaisa: Long = currentDuePaisa
 )
 
 @Immutable
@@ -259,10 +262,14 @@ object FinancialEngine {
             val shopTxs = txByShop[shop.id] ?: emptyList()
             var dueGiven = 0L
             var paymentReceived = 0L
+            var dueTaken = 0L
+            var paidToShop = 0L
             for (tx in shopTxs) {
                 when (TransactionType.fromString(tx.type)) {
                     TransactionType.SHOP_DUE -> dueGiven += tx.amountPaisa
                     TransactionType.SHOP_PAYMENT -> paymentReceived += tx.amountPaisa
+                    TransactionType.EXPENSE -> dueTaken += tx.amountPaisa
+                    TransactionType.MAKE_PAYMENT -> paidToShop += tx.amountPaisa
                     else -> {}
                 }
             }
@@ -274,7 +281,10 @@ object FinancialEngine {
                 totalPaymentReceivedPaisa = paymentReceived,
                 currentDuePaisa = currentDue,
                 transactionCount = shopTxs.size,
-                transactions = shopTxs
+                transactions = shopTxs,
+                totalDueTakenPaisa = dueTaken,
+                totalPaidToShopPaisa = paidToShop,
+                netDuePaisa = currentDue
             )
         }
 
